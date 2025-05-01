@@ -8,7 +8,7 @@
 
 ## Contact
 
-To contact me, please do it through the [GitHub repository](https://github.com/Manarom/BandPyrometry).
+To contact me, please do it through the [GitHub repository](https://github.com/Manarom/ThermovisorData.jl).
 
 ## License
 
