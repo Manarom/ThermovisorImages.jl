@@ -7,7 +7,7 @@
  In `/notebook` folder there is a [Pluto](https://plutojl.org/) notebook, which can be used as an example of package usage.
 
 
-  Full documentation is available at 
+  Full documentation is available at  [documentation](https://manarom.github.io/ThermovisorData.jl/)
 
 # Installation 
 
