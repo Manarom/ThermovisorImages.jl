@@ -1,7 +1,7 @@
 source_dir = joinpath(abspath(joinpath(@__DIR__, "..")),"src")
 
 using Revise
-includet(joinpath(@__DIR__,"ThermovisorData.jl"))
+includet(joinpath(source_dir,"ThermovisorData.jl"))
 
 #include(joinpath(source_dir,"ThermovisorData.jl"))
 

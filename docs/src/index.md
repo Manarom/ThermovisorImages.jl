@@ -1,5 +1,5 @@
 
-# BandPyrometry.jl
+# ThermovisorData.jl
 
 ## General description
 

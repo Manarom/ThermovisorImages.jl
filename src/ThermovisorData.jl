@@ -1,9 +1,8 @@
 module ThermovisorData
     using Images,ImageShow,ImageIO
-    using  Plots,CSV
+    using Plots,CSV
     using Colors, ColorVectorSpace
     using Dates,Statistics,LinearAlgebra
-    #using BandPyrometry
     using ImageSegmentation,IndirectArrays
     using Optim
     using LaTeXStrings
@@ -29,8 +28,13 @@ module ThermovisorData
         within_mask_line_distribution
 
     """
-        Package to visualize and evaluate some descriptive statistics on thermal images 
-        saved to 
+    Package designed to process static thermal images stored as matrices in CSV format,
+    where each matrix element represents a temperature value. This package enables users to load
+    images from files, calculate temperature distributions, and compute statistical analyses for
+    temperatures along specified lines. It also calculates averaged angular and radial temperature
+    distributions (along with standard deviations) within Regions of Interest (ROIs) such as 
+    circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
+    
     """    
     ThermovisorData
 
