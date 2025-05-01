@@ -4,7 +4,7 @@
 
 **ThervisorData.jl** is a small package designed to process static thermal images stored as matrices in CSV format, where each matrix element represents a temperature value. It enables users to load images from files, calculate temperature distributions, and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
 
- In `/test` folder there are two [Pluto](https://plutojl.org/) notebooks, which can be used as examples of package usage.
+ In `/notebook` folder there is a [Pluto](https://plutojl.org/) notebook, which can be used as an example of package usage.
 
 
   Full documentation is available at 
