@@ -7,7 +7,7 @@
  In `/test` folder there are two [Pluto](https://plutojl.org/) notebooks, which can be used as examples of package usage.
 
 
-  Full documentation is available at https://manarom.github.io/BandPyrometry.jl/
+  Full documentation is available at 
 
 # Installation 
 
@@ -17,12 +17,12 @@
 
 2a) Clone this repository to your local machine 
 
-3a) use `include("BandPyrometry_folder\src\BandPyrometry.jl)` in REPL or other module's to bring BandPyrometry module to the global scope
+3a) use `include("thermovisor_data_folder\src\ThermovisorData.jl)` in REPL or other module's to bring BandPyrometry module to the global scope
 
-4a) use `using .BandPyrometry` to bring the module and its content to the corresponding namespace
+4a) use `using .ThermovisorData` to bring the module and its content to the corresponding namespace
 
 #### For development
 
 2c) Clone this repository to `username/.julia/dev/`.
 
-3c) Enter the package manager in REPL by pressing `]`  then add the package by typing `dev BandPyrometry`
+3c) Enter the package manager in REPL by pressing `]`  then add the package by typing `dev ThermovisorData`
