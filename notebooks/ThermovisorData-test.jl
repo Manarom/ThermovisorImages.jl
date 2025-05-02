@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.6
+# v0.20.8
 
 using Markdown
 using InteractiveUtils
@@ -29,13 +29,13 @@ end;
 using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,Images
 
 # ╔═╡ e71f123c-284e-4107-8231-4031873f122c
-using Main.ThermovisorData
+using Main.ThermovisorData # it always fails on the first run when Revise is use 
 
 # ╔═╡ 4460f260-f65f-446d-802c-f2197f4d6b27
 md"""
-### This notebook demostrates main features of ThermovisorData package
+### This notebook demostrates main features of `ThermovisorData.jl` package
 #
-**ThervisorData.jl** is a small package designed to process static thermal images stored as matrices in CSV format, where each matrix element represents a temperature value. This package enables users to load images from files, calculate temperature distributions, and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
+**ThervisorData.jl** is a small package designed to process static thermal images stored as matrices. Each matrix element represents a temperature value. This package enables users to load images from csv files, calculate temperature distributions, and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
 
 The image can also be filtered to remove all other patterns from the image except the one with selected mark.
 
@@ -48,7 +48,7 @@ md"""
 ###### This notebooks describes the following features:
 
 *  1. Loading image
-*  2. Creating `CentredObj` marker
+*  2. Creating `CentredObj` marker (ROI object)
 *  3. Filtering the image
 *  4. Fitting marker position and size to the pattern
 *  5. Evaluating radial and angular temperature distributions
@@ -57,6 +57,7 @@ md"""
 
 # ╔═╡ f6c1be87-94d2-4b08-a52d-6eb637192ee8
 includet(joinpath(sources_path,"ThermovisorData.jl"))
+# include(joinpath(sources_path,"ThermovisorData.jl")) 
 
 # ╔═╡ 870113c3-b439-4d34-90d8-fdd8a158f9dd
 md"""
@@ -64,10 +65,10 @@ md"""
 
 
 All examples of temperature distribution images from real application are in 
-`"project_folder\thermal images\ "` folder. All thermal images are in csv - format
+`"...project_folder\thermal images\ "` folder. All thermal images are in csv - format
 
-Function `ThermovisorData.find_temperature_files(images_folder)` returns `Dict` with tthermovisor data file labels matched to the full file names and actual measurements temperatures. This works simple by parsing the name of the file, it should contain :
-"any-name-T567.csv" is interpreted as a thermal image recorded for the temperature T = 567, here all numbers after the "T" symbol are interpreted as the temperature value.
+Function `ThermovisorData.find_temperature_files(images_folder)` returns `Dict` with thermovisor data file labels matched to the full file names and actual measurements temperatures. This works simple by parsing the name of the file, to be parsed as thermal image file it's name should be like :
+"any-name-T567.csv" . This file is automatically interpreted as a thermal image recorded for the temperature T = 567, here all numbers after the "T" symbol are interpreted as the temperature value.
 
 """
 
@@ -91,30 +92,44 @@ end
 md"""
 	### 2.Creating `CentredObj` marker
 
-	Select marker type and adjust it's centre coordinates and dimentions
-	
+	`CentredObj` acts as a region of interest (ROI), it has independent (from the image) coordinates and size, thus it can be used to scan the image and monitor it's values. `CentredObj` ROI can be of different shapes viz circle, rectangle and square. 
+
+	Select marker type and adjust it's centre coordinates and dimentions, use sliders to move the ROI over the image:	
+
 	marker type = $(@bind test_mask_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) \
 	center point row index = $(@bind test_mask_center_x Slider(1:1000,default=100,show_value=true)) \
 	center point column index = $(@bind test_mask_center_y Slider(1:1000,default=100,show_value=true)) \
 	side a= $(@bind test_side_a Slider(1:1000,default=100,show_value=true)) 
 	side b= $(@bind test_side_b Slider(1:1000,default=100,show_value=true))
 
-	automake image = $(@bind is_make_obj_selfy CheckBox(false))
+	show marker on separate image = $(@bind is_make_obj_selfy CheckBox(false))
 
 	"""
 
-# ╔═╡ a963a19c-1a1f-4f44-975b-7803a6b9d9cd
-begin 
+# ╔═╡ 854731c1-7a34-4066-aa74-01629c87d75d
+begin
+
+	mm_per_pixel = Ref(0.8); # this is used to calibrate the image dimentions 
 	test_coord_vect = [test_mask_center_x,test_mask_center_y,test_side_a]
 	if test_mask_type==RectangleObj
 		append!(test_coord_vect,test_side_b)
 	end
 	test_centre_obj = ThermovisorData.obj_from_vect(test_mask_type,test_coord_vect)
 	is_make_obj_selfy ? centre_obj_image = draw(test_centre_obj,thickness=25) : nothing
+	
+	rgb_image_initial = draw!(rescaled_image.initial,color_scheme="HEAT",test_centre_obj,show_cross = true)
+			imag_initial_show = ThermovisorData.draw_line_within_mask!(rgb_image_initial,test_centre_obj,0,10,color_scheme="R1")
+	
 end
 
-# ╔═╡ 9ffe9b99-ab18-49b2-9179-3afb81b7be48
-mm_per_pixel = Ref(0.8);
+# ╔═╡ 13f01881-2645-429b-9856-6c3f19c0ad48
+md"""
+The following block evaluates the average and standart deviation of temperature within the ROI 
+
+Average temperature within the marker <T>=$(ThermovisorData.mean_within_mask(rescaled_image.initial,test_centre_obj)) 
+
+Standat deviation of average std(T) = $(ThermovisorData.std_within_mask(rescaled_image.initial,test_centre_obj))
+"""
 
 # ╔═╡ 5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
 md"""
@@ -126,26 +141,29 @@ md"""
 """
 
 # ╔═╡ 3fbc6b45-974e-430e-a4e6-960323015e74
-md""" do you want to filter initial image ? = $(@bind filter_init_image CheckBox(default=false))"""
+md""" 
 
-# ╔═╡ 854731c1-7a34-4066-aa74-01629c87d75d
-begin
+do you want to filter image ? = $(@bind filter_init_image CheckBox(default=true))
+
+filter by $(@bind filter_by_option Select(["CentredObj", "Pattern"]))
+
+show reduced $(@bind is_show_filtered_reduced CheckBox(default=false))
+
+"""
+
+# ╔═╡ 8b6f604d-157b-42cd-a0c6-8bd5562b47ef
+begin 
 	if filter_init_image
-		filtered_by_obj = filter_image(rescaled_image,test_centre_obj)
-		h2 = heatmap(filtered_by_obj.full.initial[end:-1:1,:],dpi=600)
-		title!("\\mu =$(filtered_mean(filtered_by_obj)); std = $(filtered_std(filtered_by_obj))")
-	else
-			rgb_image_initial = draw!(rescaled_image.initial,color_scheme="HEAT",test_centre_obj,show_cross = true)
-			imag_initial_show = ThermovisorData.draw_line_within_mask!(rgb_image_initial,test_centre_obj,0,10,color_scheme="R1")
+		# filtering the image
+		if filter_by_option=="CentredObj"
+			filtered_by_obj = ThermovisorData.filter_image(rescaled_image,test_centre_obj)
+		else
+			filtered_by_obj = ThermovisorData.filter_image(rescaled_image,ThermovisorData.marker_image(rescaled_image))
+		end
+		h2 = ThermovisorData.draw(filtered_by_obj,draw_reduced=is_show_filtered_reduced) # draws filtered image
+		#title!("\\mu =$(filtered_mean(filtered_by_obj)); std = $(filtered_std(filtered_by_obj))")
 	end
 end
-
-# ╔═╡ 13f01881-2645-429b-9856-6c3f19c0ad48
-md"""
-Average temperature within the marker <T>=$(ThermovisorData.mean_within_mask(rescaled_image.initial,test_centre_obj)) 
-
-Standat deviation of average std(T) = $(ThermovisorData.std_within_mask(rescaled_image.initial,test_centre_obj))
-"""
 
 # ╔═╡ 38a45961-0ffb-43d4-aa24-36d503ed4618
 md"Save the current heatmap $(@bind save_distr CheckBox(default=false))"
@@ -279,23 +297,22 @@ save_average_radial_distribution ? savefig(p,joinpath(notebook_path,"radial_dist
 
 # ╔═╡ Cell order:
 # ╟─4460f260-f65f-446d-802c-f2197f4d6b27
-# ╠═2c5e6e4c-92af-4991-842a-7e5bdc55a46d
-# ╠═fc6af4b0-1127-11f0-1b66-a59d87c5b141
-# ╠═051044c5-760c-4b60-90fc-82a347c3b6bc
-# ╠═f6c1be87-94d2-4b08-a52d-6eb637192ee8
-# ╠═e71f123c-284e-4107-8231-4031873f122c
-# ╠═870113c3-b439-4d34-90d8-fdd8a158f9dd
+# ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
+# ╟─fc6af4b0-1127-11f0-1b66-a59d87c5b141
+# ╟─051044c5-760c-4b60-90fc-82a347c3b6bc
+# ╟─f6c1be87-94d2-4b08-a52d-6eb637192ee8
+# ╟─e71f123c-284e-4107-8231-4031873f122c
+# ╟─870113c3-b439-4d34-90d8-fdd8a158f9dd
 # ╟─c241bae6-1925-4be1-af41-44673f02617a
-# ╠═43a1fb58-cd5e-4634-8770-0ff1809b2191
+# ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
 # ╟─794ebd5e-e9e0-4772-98a9-43e20c7ef4da
-# ╠═429cf33f-4422-44f0-beb8-5a1908a72273
-# ╠═a963a19c-1a1f-4f44-975b-7803a6b9d9cd
-# ╠═9ffe9b99-ab18-49b2-9179-3afb81b7be48
-# ╟─5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
-# ╟─3fbc6b45-974e-430e-a4e6-960323015e74
+# ╟─429cf33f-4422-44f0-beb8-5a1908a72273
 # ╟─854731c1-7a34-4066-aa74-01629c87d75d
 # ╟─13f01881-2645-429b-9856-6c3f19c0ad48
-# ╟─38a45961-0ffb-43d4-aa24-36d503ed4618
+# ╟─5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
+# ╟─3fbc6b45-974e-430e-a4e6-960323015e74
+# ╟─8b6f604d-157b-42cd-a0c6-8bd5562b47ef
+# ╠═38a45961-0ffb-43d4-aa24-36d503ed4618
 # ╟─1467b184-22ac-4038-ad1b-f084d4443b27
 # ╟─c87a830a-f48a-4444-81bc-3efd69a130ad
 # ╟─768535e0-a514-4dff-ac8b-0d7ca126149c

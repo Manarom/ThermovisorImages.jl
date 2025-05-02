@@ -28,12 +28,14 @@ module ThermovisorData
         within_mask_line_distribution
 
     """
-    Package designed to process static thermal images stored as matrices in CSV format,
-    where each matrix element represents a temperature value. This package enables users to load
-    images from files, calculate temperature distributions, and compute statistical analyses for
-    temperatures along specified lines. It also calculates averaged angular and radial temperature
-    distributions (along with standard deviations) within Regions of Interest (ROIs) such as 
-    circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
+    ThermovisorData
+
+    is a package designed to process thermal images stored as matrices
+    Each  element of thermal image represents a temperature value. The package enables users to 
+    load images from files, calculate temperature distributions, and compute statistical analyses
+    for temperatures along specified lines. It also calculates averaged angular and radial temperature
+    distributions (along with standard deviations) within Regions of Interest (ROIs [`CentredObj`](@ref)) 
+    such as  circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
     
     """    
     ThermovisorData
@@ -47,14 +49,12 @@ module ThermovisorData
     const DefColorScheme = Ref("HEAT")
     
     """
-	`RescaledImage` - structure stores the image data mapped to region  [0,1]
-    initial data before rescaling, min max values and image after the rescaling
-	we need rescaled image to use greyscale conversion, distance trasform 
-            initial  - initial image before rescaling
-            sz - size of the image
-            min - min and max values 
-            max  - 
-            im - image with all values from 0 to 1 
+	    RescaledImage - structure stores the image data mapped to region  [0,1]
+initial  - initial image before rescaling
+sz - size of the image
+min - minimum value
+max  - maximum value
+im - image with all values from 0 to 1 
 """
     mutable struct RescaledImage{T} 
         initial::Matrix{T}
@@ -75,16 +75,14 @@ module ThermovisorData
         return (min,max,image)
     end
     """
-        The returning type of `filter_image` function
+        Type to store image with filtered temperature region 
 
-        :full - filtered rescaled image of the same size as the input with all pixels which are not the part of the pattern with label value 
-        
-        :region_indices - cartesian indices of the pattern in the input image
-        
-        :reduced - rectangular image with zeroes removed as much as possible  (the 	scaling of this image is the same as of the input `imag.initial` see `RescaledImage` type )
-
-        :reduced_flag - bitmatrix version of (reduced)
-
+:full - filtered rescaled image of the same size as the input with all pixels which are not the part of the pattern with label value 
+:region_indices - cartesian indices of the pattern in the input image
+:reduced - image of reduced size where all not-inpatter pixels removed  
+    (the 	scaling of this image is the same as of the input `imag.initial` 
+    see [`RescaledImage`](@ref) type )
+:reduced_flag - bitmatrix version of (reduced)
     """
     mutable struct FilteredImage{T}
         full::RescaledImage{T}
@@ -96,10 +94,11 @@ module ThermovisorData
     """
     full_image_flag(filtered_im::FilteredImage)
 
-    Returns the BItMatrix flag of filtered pattern in the whole image.
-    ```
-        im_rescale = RescaledImage()
-    ```
+Returns the BitMatrix flag of filtered pattern in the whole image.
+Can be used as index matrix in the full image e.g.:
+ `filtered_image.full.initial[ull_image_flag(filtered_image)]` will return 
+ all elements which belong to the pattern
+
 """
 function full_image_flag(filtered_im::FilteredImage) 
         flag = BitMatrix(undef,filtered_im.full.sz...)
@@ -110,15 +109,16 @@ function full_image_flag(filtered_im::FilteredImage)
     reduced_image_flag(fim::FilteredImage) =  copy(fim.reduced_flag)  
     reduced_image(fim::FilteredImage) = copy(fim.reduced)
     """
+    image_discr(im1,im2)
 
-	Calculates the scalar distance between two matrices by checking the equality of their elements
-
+Calculates the scalar distance between two matrices by checking the equality of their elements
 """
-    function image_discr(im1,im2)
+function image_discr(im1,im2)
         # calculates distance between two bit-images of the same size 
         N = prod(size(im1))
         return sum(1 - i[1]==i[2] for i in zip(im1,im2))/(2*N)
     end
+    
     """
         `CentredObj` is a sort of ROI objects. It has centre coordinates, object's center can be 
         anywhere with respect to the image indices. ROI also has one or more dimentions (in pixels)
@@ -127,23 +127,20 @@ function full_image_flag(filtered_im::FilteredImage)
         This is opposite to the ImageDraw, where first Point coordinate corresponds to the column index and 
         the second one to the row index
             
-    To impement `CentredObj` abstraction one needs to implement:
-    [`is_within`](@ref) - function to check if inds are within the `CentredObj`
-
-    [`line_within_mask`](@ref) - function to check if all line points are within the `CentredObj`
-
-    [`fill_x0!`](@ref) - function to fill the optimization starting vector during `CentredObj` 
-    fitting the image
-
-    [`convert_to_drawavable`](@ref) fucntion to convert the `CentredObj` to a drawable obj for `ImageDraw`
-
+To impement `CentredObj` abstraction one needs to implement:
+[`is_within`](@ref) - function to check if inds are within the `CentredObj`
+[`line_within_mask`](@ref) - function to check if all line points are within the `CentredObj`
+[`fill_x0!`](@ref) - function to fill the optimization starting vector during `CentredObj` 
+fitting the image
+[`convert_to_drawavable`](@ref) fucntion to convert the ['CentredObj`](@ref) to a drawable obj for `ImageDraw`
 """
-    abstract type CentredObj end 
+abstract type CentredObj end 
+    
     
     """
         copyobj(c::T) where T<:CentreObj
 
-Copies the CentreObj creating new instance
+Copies the ['CentredObj`](@ref) creating new instance
 """
     function copyobj(c::T) where T<:CentredObj 
         return obj_from_vect(T,[c.center...,c.dimensions...])
@@ -151,14 +148,17 @@ Copies the CentreObj creating new instance
     """
     Base.length(c::CentredObj)
 
-Total number of values needed to create `CentredObj` of specified type
+Total number of values needed to create ['CentredObj`](@ref) of specified type
 """
     function Base.length(c::CentredObj) 
         return Base.length(c.dimensions) + 2
     end 
     """
-    Function to check if indices are within the object
-    """
+    is_within(c::CentredObj,_)
+
+
+Function to check if indices are within ['CentredObj`](@ref)
+"""
     function is_within(c::CentredObj,_)  DomainError(typeof(c),"no implementation") end
     function is_within(c::CentredObj,i::CartesianIndex) 
         return is_within(c,SVector(Tuple.(i)))
@@ -169,9 +169,8 @@ Total number of values needed to create `CentredObj` of specified type
 
 Function returns endpoint of the line lying fully within the mask  - tuple of four point which can be 
 directly splatted to the along_line_distribution
-
-ang - angle in degrees 
-line_length - the length of line   
+* ang - angle in degrees 
+* line_length - the length of line   
 
 """
     function line_within_mask(c::CentredObj,::Float64,::Int)  DomainError(typeof(c),"no implementation") end
@@ -207,27 +206,30 @@ line_length - the length of line
     """
     draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=55,color::RGB{Float64}=RGB{Float64}(0,1,0), kwargs...)
 
-    Draws CentreObj inside the image.
+Draws CentreObj inside the image.
 
-    image - image
-    c - object 
-    fill - if true the interior of the object will be filled 
-    thickness - the thickness of the object's frame
-    color - frame and filling color 
+image - image
+c - object 
+fill - if true the interior of the object will be filled 
+thickness - the thickness of the object's frame
+color - frame and filling color 
 """
-    function draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=-1,
+function draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=-1,
             color::RGB{Float64}=RGB{Float64}(0,1,0), 
             color_scheme::String="",show_cross=true,kwargs...) 
 
         rgbim = to_rgb(image,color_scheme=color_scheme)
         #im_pic = ImageDraw.draw!(rgbim,LineTwoPoints(points_inds...), RGB{Float64}(1,0,0))             
-        return   draw!(rgbim,c;fill=fill,thickness=thickness, color=color, show_cross=show_cross,kwargs...)   
+        return   draw!(rgbim,c;
+            fill=fill,thickness=thickness, 
+            color=color, show_cross=show_cross,kwargs...)   
     end
     draw(image::Matrix{Float64};color_scheme::String=DefColorScheme[]) = to_rgb(image,color_scheme=color_scheme)
     draw(image::RescaledImage;color_scheme::String=DefColorScheme[]) = draw(image.initial,color_scheme=color_scheme)
     draw(image::FilteredImage;color_scheme::String=DefColorScheme[],draw_reduced::Bool=false) = draw_reduced ? draw(reduced_image(image),color_scheme=color_scheme) : draw(image.full,color_scheme=color_scheme) 
     
-    function draw!(rgbim::Matrix{RGB{Float64}},c::CentredObj;fill=false,
+    function draw!(rgbim::Matrix{RGB{Float64}},
+        c::CentredObj;fill=false,
         thickness::Int=55,
         color::RGB{Float64}=RGB{Float64}(0,1,0), show_cross=true,kwargs...) 
 
@@ -242,8 +244,7 @@ line_length - the length of line
     to_rgb(image::Matrix{Float64};color_scheme::String="")
 
 Converts matrix to rgb martix by applyting the color scheme 
-using `applycolourmap` function from `PerceptualColourMaps`
-    
+using `applycolourmap` function from `PerceptualColourMaps`  
 """
 function to_rgb(image::Matrix{Float64};color_scheme::String="")
         if Base.length(color_scheme)==0 
