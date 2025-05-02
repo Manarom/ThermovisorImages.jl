@@ -23,10 +23,11 @@ begin# we need the project structrue inside the notebook
 	import Pkg
 	Pkg.activate(project_path)
 	sources_path = joinpath(project_path,"src")# it is supposed that sources are in separate folder \project_folder\src\
+	assets_folder = joinpath(project_path,"docs","src","assets")
 end;
 
 # ╔═╡ 051044c5-760c-4b60-90fc-82a347c3b6bc
-using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,Images
+using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO
 
 # ╔═╡ e71f123c-284e-4107-8231-4031873f122c
 using Main.ThermovisorData # it always fails on the first run when Revise is use 
@@ -54,6 +55,9 @@ md"""
 *  5. Evaluating radial and angular temperature distributions
 *  6. Fitting multiple ROI objects to the image with several temperature features
 """
+
+# ╔═╡ 215ed2f4-71ba-4cb5-b198-677d0d7ffb38
+md" default image saving folder $(@bind image_save_folder PlutoUI.TextField(default = assets_folder))"
 
 # ╔═╡ f6c1be87-94d2-4b08-a52d-6eb637192ee8
 includet(joinpath(sources_path,"ThermovisorData.jl"))
@@ -120,6 +124,16 @@ begin
 	rgb_image_initial = draw!(rescaled_image.initial,color_scheme="HEAT",test_centre_obj,show_cross = true)
 			imag_initial_show = ThermovisorData.draw_line_within_mask!(rgb_image_initial,test_centre_obj,0,10,color_scheme="R1")
 	
+end
+
+# ╔═╡ 9f55febb-b047-4b22-8575-209d45354d51
+md" Export image to file $(@bind save_image CheckBox(default = false))"
+
+# ╔═╡ 4feea216-ee48-42a3-b4ba-454f28ff690a
+begin
+	if save_image 		
+		FileIO.save(joinpath(image_save_folder,"initial_image.png"), rgb_image_initial)
+	end
 end
 
 # ╔═╡ 13f01881-2645-429b-9856-6c3f19c0ad48
@@ -271,7 +285,7 @@ begin
 		(L,meanD,stdD,l_b,u_b,t_values) = ThermovisorData.radial_distribution_statistics(R,D)
 
 		
-		ThermovisorData.plot_radial_distribution_statistics(L,meanD,stdD,
+		p_radial = ThermovisorData.plot_radial_distribution_statistics(L,meanD,stdD,
         	l_b,u_b)
 
 	end
@@ -283,23 +297,31 @@ begin
 	angs = collect(ang_range)
 	(angs_plot,Dang,stdDang,l_bang,u_bang,t_valuesang) = ThermovisorData.angular_distribution_statistics(angs,R,D)
 	
-	ThermovisorData.plot_angular_distribution_statistics(angs_plot,Dang,stdDang,
+	p_angular = ThermovisorData.plot_angular_distribution_statistics(angs_plot,Dang,stdDang,
         	l_bang,u_bang)
 	end
 end
 
 # ╔═╡ e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
-md"Save averaged radial temperature ditribution $(@bind save_average_radial_distribution CheckBox(default=false))"
+md"Save image with marker and temperature distributions $(@bind save_average_radial_distribution CheckBox(default=false))"
 
 
 # ╔═╡ b4ce12e3-29ec-41ac-89d3-06d08ef2beca
-save_average_radial_distribution ? savefig(p,joinpath(notebook_path,"radial_distrib.png")) : nothing
+begin 
+	if is_rad_distr_eval&& save_average_radial_distribution  	
+		FileIO.save(joinpath(assets_folder,"filtered_image_with_marker.png"),imag)
+		savefig(pl_distrib,joinpath(assets_folder,"line_distrib.png"))
+		savefig(p_radial,joinpath(assets_folder,"radial_distrib.png"))
+		savefig(p_angular,joinpath(assets_folder,"angular_distrib.png"))
+	end
+end;
 
 # ╔═╡ Cell order:
 # ╟─4460f260-f65f-446d-802c-f2197f4d6b27
 # ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
 # ╟─fc6af4b0-1127-11f0-1b66-a59d87c5b141
 # ╟─051044c5-760c-4b60-90fc-82a347c3b6bc
+# ╟─215ed2f4-71ba-4cb5-b198-677d0d7ffb38
 # ╟─f6c1be87-94d2-4b08-a52d-6eb637192ee8
 # ╟─e71f123c-284e-4107-8231-4031873f122c
 # ╟─870113c3-b439-4d34-90d8-fdd8a158f9dd
@@ -308,6 +330,8 @@ save_average_radial_distribution ? savefig(p,joinpath(notebook_path,"radial_dist
 # ╟─794ebd5e-e9e0-4772-98a9-43e20c7ef4da
 # ╟─429cf33f-4422-44f0-beb8-5a1908a72273
 # ╟─854731c1-7a34-4066-aa74-01629c87d75d
+# ╟─9f55febb-b047-4b22-8575-209d45354d51
+# ╟─4feea216-ee48-42a3-b4ba-454f28ff690a
 # ╟─13f01881-2645-429b-9856-6c3f19c0ad48
 # ╟─5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
 # ╟─3fbc6b45-974e-430e-a4e6-960323015e74

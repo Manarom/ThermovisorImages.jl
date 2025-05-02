@@ -10,7 +10,7 @@ makedocs(
         format=Documenter.HTML(size_threshold = nothing),
         pages=[
                 "Home" => "index.md"
-                "Examples"=>["Pluto notebooks"=>"pluto_test_git.md"]
+                "Examples"=>["Pluto notebooks"=>"pluto_tests_git.md"]
                 "Modules" => ["ThermovisorData" =>"thermovisordata.md"] 
                ]#
 	)
