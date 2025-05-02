@@ -8,15 +8,15 @@
 
 Initial image and filtered image with ROI
 <p float="left">
-  <img src="./assets/initial_image.png" />
+  <img src="./assets/initial_image.png" width="320"/>
   <img src="./assets/filtered_image_with_marker.png" /> 
 </p>
 
 The following figures show temperature distribution along the line, radial and angular distribution across the ROI
 <p float="left">
-  <img src="./assets/line_distrib.png" />
-  <img src="./assets/radial_distrib.png" />
-  <img src="./assets/angular_distrib.png"  /> 
+  <img src="./assets/line_distrib.png" width="200"/>
+  <img src="./assets/radial_distrib.png" width="200"/>
+  <img src="./assets/angular_distrib.png"  width="200"/> 
 </p>
 
  In `/notebook` folder there is a [Pluto](https://plutojl.org/) notebook, which can be used as an example of package usage.
