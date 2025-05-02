@@ -132,7 +132,7 @@ To impement `CentredObj` abstraction one needs to implement:
 [`line_within_mask`](@ref) - function to check if all line points are within the `CentredObj`
 [`fill_x0!`](@ref) - function to fill the optimization starting vector during `CentredObj` 
 fitting the image
-[`convert_to_drawavable`](@ref) fucntion to convert the ['CentredObj`](@ref) to a drawable obj for `ImageDraw`
+[`convert_to_drawavable`](@ref) fucntion to convert the [`CentredObj`](@ref) to a drawable obj for `ImageDraw`
 """
 abstract type CentredObj end 
     
@@ -140,7 +140,7 @@ abstract type CentredObj end
     """
         copyobj(c::T) where T<:CentreObj
 
-Copies the ['CentredObj`](@ref) creating new instance
+Copies the [`CentredObj`](@ref) creating new instance
 """
     function copyobj(c::T) where T<:CentredObj 
         return obj_from_vect(T,[c.center...,c.dimensions...])
@@ -148,7 +148,7 @@ Copies the ['CentredObj`](@ref) creating new instance
     """
     Base.length(c::CentredObj)
 
-Total number of values needed to create ['CentredObj`](@ref) of specified type
+Total number of values needed to create [`CentredObj`](@ref) of specified type
 """
     function Base.length(c::CentredObj) 
         return Base.length(c.dimensions) + 2
@@ -157,7 +157,7 @@ Total number of values needed to create ['CentredObj`](@ref) of specified type
     is_within(c::CentredObj,_)
 
 
-Function to check if indices are within ['CentredObj`](@ref)
+Function to check if indices are within [`CentredObj`](@ref)
 """
     function is_within(c::CentredObj,_)  DomainError(typeof(c),"no implementation") end
     function is_within(c::CentredObj,i::CartesianIndex) 
@@ -187,7 +187,14 @@ directly splatted to the along_line_distribution
     
     """
     function fill_x0!(x0,im_bin::AbstractMatrix,c::CentredObj) DomainError(typeof(c),"no implementation") end
+    """
+    convert_to_drawavable(::CentredObj)
 
+Converts CentredObj to a drawable structure appropriate to the `ImageDraw`
+draw function, polygon,ellipse see [`ImageDraw.draw`] function 
+
+"""
+function convert_to_drawavable(::CentredObj) end
     """
 	`fill_im!(img,c::CentreObj)`
 	
@@ -258,7 +265,7 @@ function to_rgb(image::Matrix{Float64};color_scheme::String="")
     """
     draw(c::CentredObj;kwargs...)
 
-Returns `CentredObj` image 
+Returns `CentredObj` image of minimal possible size
 
 """
     function draw(c::CentredObj;kwargs...) 
