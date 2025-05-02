@@ -23,7 +23,7 @@ begin# we need the project structrue inside the notebook
 	import Pkg
 	Pkg.activate(project_path)
 	sources_path = joinpath(project_path,"src")# it is supposed that sources are in separate folder \project_folder\src\
-	assets_folder = joinpath(project_path,"docs","src","assets")
+	assets_folder = joinpath(project_path,"assets")
 end;
 
 # ╔═╡ 051044c5-760c-4b60-90fc-82a347c3b6bc
@@ -319,9 +319,9 @@ end;
 # ╔═╡ Cell order:
 # ╟─4460f260-f65f-446d-802c-f2197f4d6b27
 # ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
-# ╟─fc6af4b0-1127-11f0-1b66-a59d87c5b141
-# ╟─051044c5-760c-4b60-90fc-82a347c3b6bc
-# ╟─215ed2f4-71ba-4cb5-b198-677d0d7ffb38
+# ╠═fc6af4b0-1127-11f0-1b66-a59d87c5b141
+# ╠═051044c5-760c-4b60-90fc-82a347c3b6bc
+# ╠═215ed2f4-71ba-4cb5-b198-677d0d7ffb38
 # ╟─f6c1be87-94d2-4b08-a52d-6eb637192ee8
 # ╟─e71f123c-284e-4107-8231-4031873f122c
 # ╟─870113c3-b439-4d34-90d8-fdd8a158f9dd
