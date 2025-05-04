@@ -136,11 +136,14 @@ should be 1. `CentredObj` can also be used to set all image points within the RO
 e.g. `image[c] = 30` 
 
 To impement `CentredObj` abstraction one needs to implement:
-[`is_within`](@ref) - function to check if inds are within the `CentredObj`
-[`line_within_mask`](@ref) - function to check if all line points are within the `CentredObj`
-[`fill_x0!`](@ref) - function to fill the optimization starting vector during `CentredObj` 
+*[`is_within`](@ref) - function to check if inds are within the `CentredObj`
+
+*[`line_within_mask`](@ref) - function to check if all line points are within the `CentredObj`
+
+*[`fill_x0!`](@ref) - function to fill the optimization starting vector during `CentredObj` 
 fitting the image
-[`convert_to_drawable`](@ref) fucntion to convert the [`CentredObj`](@ref) to a drawable obj for `ImageDraw`
+
+*[`convert_to_drawable`](@ref) fucntion to convert the [`CentredObj`](@ref) to a drawable obj for `ImageDraw`
 """
 abstract type CentredObj end 
     
@@ -158,7 +161,7 @@ Copies the [`CentredObj`](@ref) creating new instance
 
 Total number of values needed to create [`CentredObj`](@ref) of specified type
 """
-    function Base.length(c::CentredObj) 
+function Base.length(c::CentredObj) 
         return Base.length(c.dimensions) + 2
     end 
     """
@@ -166,7 +169,7 @@ Total number of values needed to create [`CentredObj`](@ref) of specified type
 
 Function to check if indices are within [`CentredObj`](@ref)
 """
-    function is_within(c::CentredObj,_)  DomainError(typeof(c),"no implementation") end
+function is_within(c::CentredObj,_)  DomainError(typeof(c),"no implementation") end
     """
     is_within(c::CentredObj,i::CartesianIndex)
 
@@ -235,26 +238,23 @@ directly splatted to the along_line_distribution
 * ang - angle in degrees 
 * line_length - the length of line   
 """
-    function line_within_mask(c::CentredObj,::Float64,::Int)  DomainError(typeof(c),"no implementation") end
+function line_within_mask(c::CentredObj,::Float64,::Int)  DomainError(typeof(c),"no implementation") end
     """
-    Ealuates the surface area
-    """
-    function area(c::CentredObj) DomainError(typeof(c),"no implementation") end
+Ealuates the surface area
+"""
+function area(c::CentredObj) DomainError(typeof(c),"no implementation") end
     """
         fill_x0!(x0,im_bin::AbstractMatrix,c::CentredObj)
 
 
-        Fills the optimization starting vector by seraching the centre of the image `im_bin`
-
-    
-    """
-    function fill_x0!(x0,im_bin::AbstractMatrix,c::CentredObj) DomainError(typeof(c),"no implementation") end
+Fills the optimization starting vector by seraching the centre of the image `im_bin`
+"""
+function fill_x0!(x0,im_bin::AbstractMatrix,c::CentredObj) DomainError(typeof(c),"no implementation") end
     """
     convert_to_drawable(::CentredObj)
 
 Converts CentredObj to a drawable structure appropriate to the `ImageDraw`
 draw function, polygon,ellipse see [`ImageDraw.draw`] function 
-
 """
 function convert_to_drawable(::CentredObj) end
     """
@@ -373,7 +373,7 @@ not within the CentreObj set to true.  See also `is_within`
 Fits centred obj to binary image by adjusting centre coordinates and dimentions
 `x0` - staring vector 
 """
-    function fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix,x0=nothing;
+function fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix,x0=nothing;
                                 optimizer = NelderMead()) 
         optim_fun = image_fill_discr(im_bin,c) 
 	    if isnothing(x0)
@@ -391,7 +391,7 @@ Fits `CentredObj` (modified) to filtered image (not modified)
 `fit_reduced` flag (default=true) indicates what version of the image should be fitted if true - 
 reduced otherwise - full image 
 """
-    function fit_centred_obj!(c::CentredObj,image::FilteredImage,x0=nothing;fit_reduced::Bool=true) 
+function fit_centred_obj!(c::CentredObj,image::FilteredImage,x0=nothing;fit_reduced::Bool=true) 
         return fit_reduced ? fit_centred_obj!(c,reduced_image_flag(image),x0) : fit_centred_obj!(c,full_image_flag(image),x0)
     end
 
@@ -399,8 +399,9 @@ reduced otherwise - full image
 
 Function returns the function to evaluate the discrepancy  between 
 `CentredObj` and the matrix, this function is used during the fitting procedure 
+
 """    
-    function image_fill_discr(image::AbstractMatrix,c::CentredObj)
+function image_fill_discr(image::AbstractMatrix,c::CentredObj)
          im_copy = copy(image)   
          return x-> image_discr(image, fill_im!(im_copy,fill_from_vect!(c,x)))
     end
@@ -589,8 +590,7 @@ rearranged_diagonal(c::Union{SquareObj,CircleObj}) = begin
 
     """
     Rectangular object with defined two sides
-
-    """
+"""
     mutable struct RectangleObj <:CentredObj
 
         center::MVector{2,Int}
@@ -679,7 +679,7 @@ Funtion zeroes all pixels of the image, except those belonging to the specified 
 `markers` - the matrix of the same size as the input image, each element of this matrix has unique value-label associated with some pattern.  Function `label_components` returns the markers matrix.
 (optional) - the value of the label to be selected as a pattern marker
 
-Function returns [`FIlteredImage`](@ref) object
+Function returns [`FilteredImage`](@ref) object
 """
     function filter_image(imag::RescaledImage,markers::Matrix{Int};label=0)
         # function extracts from markerd image
@@ -724,13 +724,13 @@ if external  is true than as a filtering flag the inverse of centered object ima
    """
     filter_image(imag::RescaledImage,c::CentredObj;external=false)
 
-    Filters image according 
+Filters image according 
 """
     filter_image(imag::RescaledImage,c::CentredObj;external=false) = filter_image(imag.initial,c;external=external)
     """
     filter_image!(imag::AbstractMatrix,flag::BitMatrix)
 
-    Returns `FilteredImage` taking all elements of imag which are not external_region_flag
+Returns `FilteredImage` taking all elements of imag which are not external_region_flag
 """
 function filter_image!(imag::AbstractMatrix,external_region_flag::FlagMatrix)
         external_region = @view imag[external_region_flag]
@@ -750,7 +750,7 @@ function filter_image!(imag::AbstractMatrix,external_region_flag::FlagMatrix)
     """
     cent_to_flag(c::CentredObj,sz::Tuple{Int,Int};external=false)
 
-    Converts CentredObj to bitmatrix  of size sz
+Converts CentredObj to bitmatrix  of size sz
 """
     function cent_to_flag(c::CentredObj,sz::Tuple{Int,Int};external=false)
         external_part_flag = BitMatrix(undef,sz...)
@@ -795,14 +795,13 @@ In-place filtering of `RescaledImage`
     """
     marker_image(rescaled::RescaledImage,level_threshold::Float64,distance_threshold::Float64=1e-3)
 
-    Markers image patterns, input umage is `RescaledImage` image type, 
-    level_threshold  - should be between 0.0 and 1.0
-    distance_threshold  - criterium of image binarization after distance transform
+Markers image patterns, input umage is `RescaledImage` image type, 
+level_threshold  - should be between 0.0 and 1.0
+distance_threshold  - criterium of image binarization after distance transform
 
-    returns `markers`  - matrix of Int's with the same size as the input matrix, each element 
-    of `markers` is the label index of individual patterns of the initial image
-    
-    """
+returns `markers`  - matrix of Int's with the same size as the input matrix, each element 
+of `markers` is the label index of individual patterns of the initial image
+"""
     function marker_image(rescaled::RescaledImage;
                     level_threshold::Float64=0.8,distance_threshold::Float64=1e-3)
         dist =  distance_transform(feature_transform(rescaled.im .> level_threshold))
@@ -835,8 +834,7 @@ function read_temperature_file(f_name::AbstractString)
 Searchs the folder for thermal images files using `is_temperature_file`
 Returns dictionary `Dict{String,Pair{Float64,String}}` with keys parts of files matched 
 using `is_temperature_file`, values - are temperature pairs of `Float64` => `full-file-name`
-When file name contains "_BB_" it supposed to be the blackbody themperature distribution
-        
+When file name contains "_BB_" it supposed to be the blackbody themperature distribution       
 """
 function find_temperature_files(folder::AbstractString=default_images_folder[])
 
@@ -891,10 +889,11 @@ function std_within_mask(img::AbstractMatrix, c::CentredObj)
     """
     along_line_distribution(img::AbstractMatrix{T},x0,y0,x1,y1) where T
 
-Function evaluates the matrix values distribution along the line specified by two coordinates, 
+Function evaluates matrix values distribution along the line specified by two coordinates, 
 img - input image 
 returns the tuple of two vectors: coordinates and values 
-see [`ImageDraw.bresenham(img, y0, x0, y1, x1, color)`](@ref) for details of finding coordinates
+see `ImageDraw.bresenham` for details of finding the points of the line 
+    
 returns 
 points - vector of coordinates along the line
 distrib - distribution
@@ -1047,11 +1046,11 @@ Function returns:
                                                                                                 use_wu::Bool=false)
 
 
-    The same as `within_mask_line_points_distribution` but returns the line length along the coordinates within the 
-    image.
+The same as `within_mask_line_points_distribution` but returns the line length along the coordinates within the 
+image.
 
-    `line_length` - the length of line in the same units as `length_per_pixel`.
-    The calibration `using mm_per_pixel``, returns calibrated length along the line 
+`line_length` - the length of line in the same units as `length_per_pixel`.
+The calibration `using mm_per_pixel``, returns calibrated length along the line 
 
 """
     function along_mask_line_distribution(imag::AbstractMatrix,c::CentredObj,
@@ -1067,9 +1066,8 @@ Function returns:
     """
     radial_distribution(imag::AbstractMatrix,c::CentredObj,angles_range::AbstractRange,line_length;mm_per_pixel=1.0)
 
-    Calls `along_mask_line_distribution` on lines oriented with some angles range and puts the resulting 
-    distribution into one matrix j'th column of this matrix corresponds to the distribution along the line oriented with ang[j] angle
-
+Calls `along_mask_line_distribution` on lines oriented with some angles range and puts the resulting 
+distribution into one matrix j'th column of this matrix corresponds to the distribution along the line oriented with ang[j] angle
 """
 function radial_distribution(imag::AbstractMatrix,c::CentredObj,
                                 angles_range::AbstractRange;line_length=0.0,

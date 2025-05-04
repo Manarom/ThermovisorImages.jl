@@ -18,8 +18,13 @@ The following figures show temperature distribution along the line, radial and a
   <img src="./assets/radial_distrib.png" width="220"/>
   <img src="./assets/angular_distrib.png"  width="220"/> 
 </p>
+The following figures show (left) the initial image with several separate patterns and the same figure with several ROIs fitted to the patterns (righ)
+<p float="left">
+  <img src="./assets/multiple_patterns_initial.png" width="220"/>
+  <img src="./assets/multiple_patterns_fitted.png" width="220"/> 
+</p>
 
- In `/notebook` folder there is a [Pluto](https://plutojl.org/) notebook, which can be used as an example of package usage.
+ Detailed explanation of this images is given in  `/notebook` folder in [Pluto](https://plutojl.org/) notebook, which can be used as an example of package usage.
 
 
   Full documentation is available at  [documentation](https://manarom.github.io/ThermovisorData.jl/)

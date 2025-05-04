@@ -151,10 +151,16 @@ Standat deviation of average std(T) = $(ThermovisorData.std_within_mask(rescaled
 # ╔═╡ 5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
 md"""
 ### 2. Filtering image
-*  2.Binarization
-*  3.Distance transform
-*  4.Labeling image
-*  5.Filtering image with one label
+There are several methods for `ThermovisorData.filter_image` function. When the image is the only input argument, it goes through several operation from `ImageSegmentation` package.
+
+*  1.Binarization
+*  2.Distance transform
+*  3.Labeling 
+*  4.Filtering by selecting one of the labels
+
+After labeling, by default it takes the last label (maximum label value), but label value could be provided externally with a corresponding keyword `label`
+If the `CnetredObj` is provided as a secon input argument filtering just removes all elements of the initial image which are not within the `CentredObj`.
+
 """
 
 # ╔═╡ 3fbc6b45-974e-430e-a4e6-960323015e74
@@ -168,6 +174,9 @@ show reduced $(@bind is_show_filtered_reduced CheckBox(default=false))
 
 """
 
+# ╔═╡ ca5eea20-2bb3-4407-aa09-af8de2332b84
+md"##### Filtered image:"
+
 # ╔═╡ 8b6f604d-157b-42cd-a0c6-8bd5562b47ef
 begin 
 	if filter_init_image
@@ -177,8 +186,7 @@ begin
 		else
 			filtered_by_obj = ThermovisorData.filter_image(rescaled_image)
 		end
-		h2 = ThermovisorData.draw(filtered_by_obj,draw_reduced=is_show_filtered_reduced) # draws filtered image
-		#title!("\\mu =$(filtered_mean(filtered_by_obj)); std = $(filtered_std(filtered_by_obj))")
+		h2 = ThermovisorData.draw(filtered_by_obj,draw_reduced=is_show_filtered_reduced) 
 	end
 end
 
@@ -191,8 +199,8 @@ save_distr ? savefig(joinpath(notebook_path,"heatmap.png")) : nothing
 # ╔═╡ c87a830a-f48a-4444-81bc-3efd69a130ad
 md"""
 
-	### Testing work with in-marker distribution
-	"""
+###  4,5. Fitting marker and Evaluating radial and angular temperature distributions
+"""
 
 # ╔═╡ 6d37916c-7895-49d3-b8a3-c8661050ebcb
 md" Use Wu algorithm? $(@bind is_use_wu CheckBox(default=false))"
@@ -319,9 +327,86 @@ begin
 	end
 end;
 
+# ╔═╡ 764a320c-ff6b-48d0-a5b4-48a3df3ece01
+md"""
+###  6. Fitting multiple ROI objects to the image with several temperature features
+
+In this block we are going to create the image with randomly distributed multiple patterns and fit multiple `CentredObj`s to this image. 
+"""
+
+# ╔═╡ 10954f10-9414-4839-872f-c2516d5d8e4e
+@bind fit_multiple Button("Regenerate patterns")
+
+# ╔═╡ cc909b53-ed4d-44a1-a410-ff25533afc2d
+md"Initial image with randomly distributed patterns"
+
+# ╔═╡ d5b6f453-5e92-41e6-a45f-cb75660bc198
+begin 
+	fit_multiple
+	Patterns_number = 5 #total number of patterns
+	img = fill(0.0,640,480)# filling initial scene
+	rnd_centre() = [rand(1:640),rand(1:480)] # random center positions
+	rnd_diam() = rand(20:10:200) # random diameter generator
+	# filling the vector of initial ROIs
+	centered_objs = [CircleObj(rnd_centre(),rnd_diam()) for _ in 1:Patterns_number]
+	for c in centered_objs
+		img[c]=1 # centred objects can be used as indices in images 
+	end
+	rs = RescaledImage(img)
+	markers = ThermovisorData.marker_image(rs)
+	
+	separate_patterns_number = 0 # now we need to check for the separate patterns number 
+	for i in 1:Patterns_number
+		for m in markers
+			if m==i
+				global separate_patterns_number=i
+				break
+			end
+		end
+	end
+	rgb_markers = ThermovisorData.draw(Float64.(markers))	# converting to rgb image
+end
+
+# ╔═╡ 96ad6e27-52dd-41aa-b115-f852049a485a
+md"""Number of separate patterns:    $(separate_patterns_number)"""
+
+# ╔═╡ 0badf26a-38fa-45be-9704-d4e80b12a9cb
+md"Fit all objects $(@bind is_fit_multiple CheckBox(default=false))"
+
+# ╔═╡ 6adfae4d-5137-4692-b9f3-3793c4c76202
+begin # fitting ROI's to image with several 
+	fit_multiple
+	if is_fit_multiple
+		centered_objs_to_fit = [CircleObj(rnd_centre(),rnd_diam()) for _ in 1:separate_patterns_number]
+		Threads.@sync for (i,c) in enumerate(centered_objs_to_fit)
+			Threads.@spawn ThermovisorData.fit_centred_obj!(c,markers.==i)
+		end
+			rgb_image_multi_roi = draw!(img,centered_objs_to_fit[1],show_cross = false,fill=true)
+			for i in 2:length(centered_objs_to_fit)
+				 ThermovisorData.draw!(rgb_image_multi_roi,centered_objs_to_fit[i],thickness = 1,fill=true,show_cross = false)
+			end
+			rgb_image_multi_roi
+	else
+		nothing
+	end
+end
+
+# ╔═╡ 68b33b39-5ef5-4560-b4b2-1fe2f43a3628
+md" Save multiple patterns fit ? $(@bind is_save_multipattern_fit CheckBox(default=false))"
+
+# ╔═╡ 8a132aba-aa8a-428a-84a2-0ab6e5e2b891
+begin 
+	if is_save_multipattern_fit
+		FileIO.save(joinpath(assets_folder,"multiple_patterns_initial.png"),rgb_markers)
+		if is_fit_multiple
+			FileIO.save(joinpath(assets_folder,"multiple_patterns_fitted.png"),rgb_image_multi_roi)
+		end
+	end
+end
+
 # ╔═╡ Cell order:
 # ╟─4460f260-f65f-446d-802c-f2197f4d6b27
-# ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
+# ╠═2c5e6e4c-92af-4991-842a-7e5bdc55a46d
 # ╠═fc6af4b0-1127-11f0-1b66-a59d87c5b141
 # ╠═051044c5-760c-4b60-90fc-82a347c3b6bc
 # ╠═215ed2f4-71ba-4cb5-b198-677d0d7ffb38
@@ -332,29 +417,39 @@ end;
 # ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
 # ╟─794ebd5e-e9e0-4772-98a9-43e20c7ef4da
 # ╟─429cf33f-4422-44f0-beb8-5a1908a72273
-# ╠═854731c1-7a34-4066-aa74-01629c87d75d
-# ╠═48c53ed9-127d-4e8e-bd29-416292057bff
+# ╟─854731c1-7a34-4066-aa74-01629c87d75d
+# ╟─48c53ed9-127d-4e8e-bd29-416292057bff
 # ╟─9f55febb-b047-4b22-8575-209d45354d51
 # ╟─4feea216-ee48-42a3-b4ba-454f28ff690a
 # ╟─13f01881-2645-429b-9856-6c3f19c0ad48
 # ╟─5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
 # ╟─3fbc6b45-974e-430e-a4e6-960323015e74
+# ╟─ca5eea20-2bb3-4407-aa09-af8de2332b84
 # ╠═8b6f604d-157b-42cd-a0c6-8bd5562b47ef
 # ╠═38a45961-0ffb-43d4-aa24-36d503ed4618
 # ╟─1467b184-22ac-4038-ad1b-f084d4443b27
-# ╟─c87a830a-f48a-4444-81bc-3efd69a130ad
+# ╠═c87a830a-f48a-4444-81bc-3efd69a130ad
 # ╟─768535e0-a514-4dff-ac8b-0d7ca126149c
 # ╟─5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
 # ╟─6d37916c-7895-49d3-b8a3-c8661050ebcb
-# ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
+# ╠═6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
 # ╟─c67290fc-6291-4f3e-a660-a3c4afa3a5e3
 # ╟─4e1a5050-59b0-4d24-98bb-1520c06b28c5
-# ╠═42a7b186-aa04-4249-a129-bf925f181008
+# ╟─42a7b186-aa04-4249-a129-bf925f181008
 # ╟─e1ccfd33-3d54-4249-86f1-381a1ef90615
-# ╠═b096c4f2-9dce-409d-874a-a851f577bf92
-# ╠═39e50296-21ff-4407-894f-2a380dc51e21
-# ╠═ca05bd4f-5656-4531-b357-331c62661174
+# ╟─b096c4f2-9dce-409d-874a-a851f577bf92
+# ╟─39e50296-21ff-4407-894f-2a380dc51e21
+# ╟─ca05bd4f-5656-4531-b357-331c62661174
 # ╟─71eb240a-5a45-4bf3-b35c-a5820ca6da6c
 # ╠═d45f106d-032a-4102-a26f-7393c2220f72
-# ╟─e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
-# ╟─b4ce12e3-29ec-41ac-89d3-06d08ef2beca
+# ╠═e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
+# ╠═b4ce12e3-29ec-41ac-89d3-06d08ef2beca
+# ╟─764a320c-ff6b-48d0-a5b4-48a3df3ece01
+# ╟─10954f10-9414-4839-872f-c2516d5d8e4e
+# ╟─cc909b53-ed4d-44a1-a410-ff25533afc2d
+# ╠═d5b6f453-5e92-41e6-a45f-cb75660bc198
+# ╠═96ad6e27-52dd-41aa-b115-f852049a485a
+# ╠═0badf26a-38fa-45be-9704-d4e80b12a9cb
+# ╠═6adfae4d-5137-4692-b9f3-3793c4c76202
+# ╠═68b33b39-5ef5-4560-b4b2-1fe2f43a3628
+# ╠═8a132aba-aa8a-428a-84a2-0ab6e5e2b891
