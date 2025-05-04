@@ -52,11 +52,16 @@ the scene.
     
     """
 	    RescaledImage - structure stores the image data mapped to region  [0,1]
+Fields:
 
 initial  - initial image before rescaling
+
 sz - size of the image
+
 min - minimum value
+
 max  - maximum value
+
 im - image with all values from 0 to 1 
 """
     mutable struct RescaledImage{T} 
@@ -81,12 +86,15 @@ im - image with all values from 0 to 1
         Type to store image with filtered temperature region 
 
 :full - filtered rescaled image of the same size as the input with all pixels which are not the part of the pattern with label value 
+
 :region_indices - cartesian indices of the pattern in the input image
+
 :reduced - image of reduced size where all not-inpatter pixels removed  
     (the 	scaling of this image is the same as of the input `imag.initial` 
     see [`RescaledImage`](@ref) type )
+
 :reduced_flag - bitmatrix version of (reduced)
-    """
+"""
     mutable struct FilteredImage{T}
         full::RescaledImage{T}
         region_indices::Vector{CartesianIndex{2}}
@@ -98,8 +106,9 @@ im - image with all values from 0 to 1
     full_image_flag(filtered_im::FilteredImage)
 
 Returns the BitMatrix flag of filtered pattern in the whole image.
+
 Can be used as index matrix in the full image e.g.:
- `filtered_image.full.initial[ull_image_flag(filtered_image)]` will return 
+ `filtered_image.full.initial[full_image_flag(filtered_image)]` will return 
  all elements which belong to the pattern
 
 """
@@ -136,14 +145,15 @@ should be 1. `CentredObj` can also be used to set all image points within the RO
 e.g. `image[c] = 30` 
 
 To impement `CentredObj` abstraction one needs to implement:
-*[`is_within`](@ref) - function to check if inds are within the `CentredObj`
 
-*[`line_within_mask`](@ref) - function to check if all line points are within the `CentredObj`
+[`is_within`](@ref) - function to check if inds are within the `CentredObj`
 
-*[`fill_x0!`](@ref) - function to fill the optimization starting vector during `CentredObj` 
+[`line_within_mask`](@ref) - function to check if all line points are within the `CentredObj`
+
+[`fill_x0!`](@ref) - function to fill the optimization starting vector during `CentredObj` 
 fitting the image
 
-*[`convert_to_drawable`](@ref) fucntion to convert the [`CentredObj`](@ref) to a drawable obj for `ImageDraw`
+[`convert_to_drawable`](@ref) fucntion to convert the [`CentredObj`](@ref) to a drawable obj for `ImageDraw`
 """
 abstract type CentredObj end 
     
@@ -182,7 +192,7 @@ function is_within(c::CentredObj,i::CartesianIndex)
     """
     is_within_iterator(img::AbstractMatrix,c::CentredObj)
 
-Iterator over all CartesianIndices within the `img` which are within the CentredObj `c`
+Iterator over all `CartesianIndices` within the `img` which are within the CentredObj `c`
 """
 function is_within_iterator(img::AbstractMatrix,c::CentredObj)
         return Iterators.filter(i->is_within(c,i),keys(img))
@@ -235,8 +245,10 @@ function shift!(c::CentredObj,x::AbstractVector)
 
 Function returns endpoint of the line lying fully within the mask  - tuple of four point which can be 
 directly splatted to the along_line_distribution
-* ang - angle in degrees 
-* line_length - the length of line   
+
+ang - angle in degrees 
+
+line_length - the length of line   
 """
 function line_within_mask(c::CentredObj,::Float64,::Int)  DomainError(typeof(c),"no implementation") end
     """
@@ -277,9 +289,13 @@ within the CentreObj are set to true.  See also `is_within`
 Draws CentreObj inside the image.
 
 image - image
+
 c - object 
+
 fill - if true the interior of the object will be filled 
+
 thickness - the thickness of the object's frame
+
 color - frame and filling color 
 """
 function draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=-1,
