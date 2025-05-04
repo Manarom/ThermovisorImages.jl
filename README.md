@@ -32,7 +32,7 @@ The following figures show temperature distribution along the line, radial and a
 
 2a) Clone this repository to your local machine 
 
-3a) use `include("thermovisor_data_folder\src\ThermovisorData.jl)` in REPL or other module's to bring BandPyrometry module to the global scope
+3a) use `include("thermovisor_data_folder\src\ThermovisorData.jl)` in REPL or other module's to bring ThermovisorData module to the global scope
 
 4a) use `using .ThermovisorData` to bring the module and its content to the corresponding namespace
 

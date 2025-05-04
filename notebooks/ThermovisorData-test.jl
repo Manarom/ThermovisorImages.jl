@@ -126,6 +126,9 @@ begin
 	
 end
 
+# ╔═╡ 48c53ed9-127d-4e8e-bd29-416292057bff
+ThermovisorData.convert_to_drawable(test_centre_obj)
+
 # ╔═╡ 9f55febb-b047-4b22-8575-209d45354d51
 md" Export image to file $(@bind save_image CheckBox(default = false))"
 
@@ -172,7 +175,7 @@ begin
 		if filter_by_option=="CentredObj"
 			filtered_by_obj = ThermovisorData.filter_image(rescaled_image,test_centre_obj)
 		else
-			filtered_by_obj = ThermovisorData.filter_image(rescaled_image,ThermovisorData.marker_image(rescaled_image))
+			filtered_by_obj = ThermovisorData.filter_image(rescaled_image)
 		end
 		h2 = ThermovisorData.draw(filtered_by_obj,draw_reduced=is_show_filtered_reduced) # draws filtered image
 		#title!("\\mu =$(filtered_mean(filtered_by_obj)); std = $(filtered_std(filtered_by_obj))")
@@ -279,7 +282,7 @@ begin
 	
 	if is_rad_distr_eval
 		new_line =line_length# minimum(side(fitted_obj))-5
-		ang_range = 0.0:1:180
+		ang_range = 0.0:1:60 # range of angles 
 		R,D = ThermovisorData.radial_distribution(image_to_show,fitted_obj,ang_range,line_length=new_line,length_per_pixel=mm_per_pixel[])
 
 		(L,meanD,stdD,l_b,u_b,t_values) = ThermovisorData.radial_distribution_statistics(R,D)
@@ -329,13 +332,14 @@ end;
 # ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
 # ╟─794ebd5e-e9e0-4772-98a9-43e20c7ef4da
 # ╟─429cf33f-4422-44f0-beb8-5a1908a72273
-# ╟─854731c1-7a34-4066-aa74-01629c87d75d
+# ╠═854731c1-7a34-4066-aa74-01629c87d75d
+# ╠═48c53ed9-127d-4e8e-bd29-416292057bff
 # ╟─9f55febb-b047-4b22-8575-209d45354d51
 # ╟─4feea216-ee48-42a3-b4ba-454f28ff690a
 # ╟─13f01881-2645-429b-9856-6c3f19c0ad48
 # ╟─5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
 # ╟─3fbc6b45-974e-430e-a4e6-960323015e74
-# ╟─8b6f604d-157b-42cd-a0c6-8bd5562b47ef
+# ╠═8b6f604d-157b-42cd-a0c6-8bd5562b47ef
 # ╠═38a45961-0ffb-43d4-aa24-36d503ed4618
 # ╟─1467b184-22ac-4038-ad1b-f084d4443b27
 # ╟─c87a830a-f48a-4444-81bc-3efd69a130ad
@@ -345,12 +349,12 @@ end;
 # ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
 # ╟─c67290fc-6291-4f3e-a660-a3c4afa3a5e3
 # ╟─4e1a5050-59b0-4d24-98bb-1520c06b28c5
-# ╟─42a7b186-aa04-4249-a129-bf925f181008
+# ╠═42a7b186-aa04-4249-a129-bf925f181008
 # ╟─e1ccfd33-3d54-4249-86f1-381a1ef90615
-# ╟─b096c4f2-9dce-409d-874a-a851f577bf92
-# ╟─39e50296-21ff-4407-894f-2a380dc51e21
-# ╟─ca05bd4f-5656-4531-b357-331c62661174
+# ╠═b096c4f2-9dce-409d-874a-a851f577bf92
+# ╠═39e50296-21ff-4407-894f-2a380dc51e21
+# ╠═ca05bd4f-5656-4531-b357-331c62661174
 # ╟─71eb240a-5a45-4bf3-b35c-a5820ca6da6c
-# ╟─d45f106d-032a-4102-a26f-7393c2220f72
+# ╠═d45f106d-032a-4102-a26f-7393c2220f72
 # ╟─e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
 # ╟─b4ce12e3-29ec-41ac-89d3-06d08ef2beca

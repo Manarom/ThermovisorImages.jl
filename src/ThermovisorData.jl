@@ -30,12 +30,14 @@ module ThermovisorData
     """
     ThermovisorData
 
-    is a package designed to process thermal images stored as matrices
-    Each  element of thermal image represents a temperature value. The package enables users to 
-    load images from files, calculate temperature distributions, and compute statistical analyses
-    for temperatures along specified lines. It also calculates averaged angular and radial temperature
-    distributions (along with standard deviations) within Regions of Interest (ROIs [`CentredObj`](@ref)) 
-    such as  circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
+is a package designed to process thermal images stored as matrices
+Each  element of thermal image represents a temperature value. The package enables users to 
+load images from files, calculate temperature distributions, and compute statistical analyses
+for temperatures along specified lines. It also calculates averaged angular and radial temperature
+distributions (along with standard deviations) within Regions of Interest (ROIs [`CentredObj`](@ref)) 
+such as  circles, squares, and rectangles. These ROI objects can be fitted to 
+distinct areas (relative to their surroundings), such as the most heated regions within
+the scene.
     
     """    
     ThermovisorData
@@ -50,6 +52,7 @@ module ThermovisorData
     
     """
 	    RescaledImage - structure stores the image data mapped to region  [0,1]
+
 initial  - initial image before rescaling
 sz - size of the image
 min - minimum value
@@ -120,19 +123,24 @@ function image_discr(im1,im2)
     end
     
     """
-        `CentredObj` is a sort of ROI objects. It has centre coordinates, object's center can be 
-        anywhere with respect to the image indices. ROI also has one or more dimentions (in pixels)
-        coordinates of centre are equal to CartesianIndices, first element is the row index, 
-        the second element is the column index!! (y and x coordinate)
-        This is opposite to the ImageDraw, where first Point coordinate corresponds to the column index and 
-        the second one to the row index
-            
+    `CentredObj` is a sort of region of interest (ROI) marker object. 
+
+`CentredObj` has centre coordinates, object's center can be 
+anywhere with respect to the image indices. ROI also has one or more size parameters (in pixels)
+coordinates of centre are equal to CartesianIndices, first element is the row index, 
+the second element is the column index!! (y and x coordinate)
+This is opposite to the ImageDraw, where first Point coordinate corresponds to the column index and 
+the second one to the row index. `CentredObj` can also be used as for indexing image[c] - returns all
+elements of image within c, `image[c]=x` sets all elements of image to the values of x, x firstindex 
+should be 1. `CentredObj` can also be used to set all image points within the ROI to a single value.
+e.g. `image[c] = 30` 
+
 To impement `CentredObj` abstraction one needs to implement:
 [`is_within`](@ref) - function to check if inds are within the `CentredObj`
 [`line_within_mask`](@ref) - function to check if all line points are within the `CentredObj`
 [`fill_x0!`](@ref) - function to fill the optimization starting vector during `CentredObj` 
 fitting the image
-[`convert_to_drawavable`](@ref) fucntion to convert the [`CentredObj`](@ref) to a drawable obj for `ImageDraw`
+[`convert_to_drawable`](@ref) fucntion to convert the [`CentredObj`](@ref) to a drawable obj for `ImageDraw`
 """
 abstract type CentredObj end 
     
@@ -156,14 +164,69 @@ Total number of values needed to create [`CentredObj`](@ref) of specified type
     """
     is_within(c::CentredObj,_)
 
-
 Function to check if indices are within [`CentredObj`](@ref)
 """
     function is_within(c::CentredObj,_)  DomainError(typeof(c),"no implementation") end
-    function is_within(c::CentredObj,i::CartesianIndex) 
+    """
+    is_within(c::CentredObj,i::CartesianIndex)
+
+`CartesianIndex` support
+"""
+function is_within(c::CentredObj,i::CartesianIndex) 
         return is_within(c,SVector(Tuple.(i)))
     end 
-    revcentre(c::CentredObj) = reverse(c.center)   
+    revcentre(c::CentredObj) = reverse(c.center)
+    """
+    is_within_iterator(img::AbstractMatrix,c::CentredObj)
+
+Iterator over all CartesianIndices within the `img` which are within the CentredObj `c`
+"""
+function is_within_iterator(img::AbstractMatrix,c::CentredObj)
+        return Iterators.filter(i->is_within(c,i),keys(img))
+    end   
+    """
+    Base.getindex(img::AbstractMatrix,c::CentredObj)
+
+`CentredObj` can be used for matrix indexing, `image[centred_object]` - returns the vector 
+of temperatures of all points of image lying within the `centred_object` of `CentredObj`
+"""
+function Base.getindex(img::AbstractMatrix,c::CentredObj)
+        return map(i->Base.getindex(img,i),is_within_iterator(img,c))
+    end
+    """
+    Base.setindex!(img::Matrix,x::Array,c::CentredObj)
+
+img[c]=x assignes all x elements to the elements of `img` with indices lying within the `CentredObj` c
+"""
+function Base.setindex!(img::Matrix,x::Array,c::CentredObj)
+        @assert firstindex(x)==1 # check if it is not obset array
+        for (ix,iimg) in enumerate(is_within_iterator(img,c))
+            img[iimg] = x[ix]
+        end
+        return nothing
+    end
+"""
+    Base.setindex!(img::Matrix{T},x::Number,c::CentredObj) where T
+
+Setting all elements within the `CentredObj` to a single value
+"""
+function Base.setindex!(img::Matrix{T},x::Number,c::CentredObj) where T
+        x_T = T(x) 
+        for i in is_within_iterator(img,c)
+            img[i] = x_T
+        end
+        return nothing
+    end
+
+    """
+    shift(c::CentredObj,x::AbstractVector)
+
+Relative shift of centred object center
+"""
+function shift!(c::CentredObj,x::AbstractVector)
+        @. c.center +=x 
+        return nothing
+    end
     """
     line_within_mask(c::CentredObj,ang::Float64,line_length::Int)
 
@@ -171,7 +234,6 @@ Function returns endpoint of the line lying fully within the mask  - tuple of fo
 directly splatted to the along_line_distribution
 * ang - angle in degrees 
 * line_length - the length of line   
-
 """
     function line_within_mask(c::CentredObj,::Float64,::Int)  DomainError(typeof(c),"no implementation") end
     """
@@ -188,20 +250,19 @@ directly splatted to the along_line_distribution
     """
     function fill_x0!(x0,im_bin::AbstractMatrix,c::CentredObj) DomainError(typeof(c),"no implementation") end
     """
-    convert_to_drawavable(::CentredObj)
+    convert_to_drawable(::CentredObj)
 
 Converts CentredObj to a drawable structure appropriate to the `ImageDraw`
 draw function, polygon,ellipse see [`ImageDraw.draw`] function 
 
 """
-function convert_to_drawavable(::CentredObj) end
+function convert_to_drawable(::CentredObj) end
     """
 	`fill_im!(img,c::CentreObj)`
 	
-	Fills bitmatrix `img` in a way that all pixels which are 
-	within the CentreObj are set to true.  See also `is_within`
-    
-	"""
+Fills bitmatrix `img` in a way that all pixels which are 
+within the CentreObj are set to true.  See also `is_within`
+"""
     function fill_im!(img,c::CentredObj)
         for i in keys(img)
             inds = [k for k in Tuple.(i)]
@@ -222,8 +283,8 @@ thickness - the thickness of the object's frame
 color - frame and filling color 
 """
 function draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=-1,
-            color::RGB{Float64}=RGB{Float64}(0,1,0), 
-            color_scheme::String="",show_cross=true,kwargs...) 
+                                        color::RGB{Float64}=RGB{Float64}(0,1,0), 
+                                        color_scheme::String="",show_cross=true,kwargs...) 
 
         rgbim = to_rgb(image,color_scheme=color_scheme)
         #im_pic = ImageDraw.draw!(rgbim,LineTwoPoints(points_inds...), RGB{Float64}(1,0,0))             
@@ -240,7 +301,7 @@ function draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=-1
         thickness::Int=55,
         color::RGB{Float64}=RGB{Float64}(0,1,0), show_cross=true,kwargs...) 
 
-        ImageDraw.draw!(rgbim,convert_to_drawavable(c,fill=fill,thickness=thickness), color; kwargs...)
+        ImageDraw.draw!(rgbim,convert_to_drawable(c,fill=fill,thickness=thickness), color; kwargs...)
         
         show_cross ? ImageDraw.draw!(rgbim, ImageDraw.Cross(ImageDraw.Point(revcentre(c)...), 50), color) : nothing
 
@@ -266,7 +327,6 @@ function to_rgb(image::Matrix{Float64};color_scheme::String="")
     draw(c::CentredObj;kwargs...)
 
 Returns `CentredObj` image of minimal possible size
-
 """
     function draw(c::CentredObj;kwargs...) 
         (x_left,y_left,x_right,y_right) = abs.(diagonal_points(c))
@@ -298,8 +358,6 @@ Returns `CentredObj` image of minimal possible size
 	
 Fills image matrix `img` in a way that all pixels which are 
 not within the CentreObj set to true.  See also `is_within`
-
-	
 """
     function fill_im_external!(img::FlagMatrix,c::CentredObj)
         for i in keys(img)
@@ -312,9 +370,8 @@ not within the CentreObj set to true.  See also `is_within`
     fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix,x0=nothing;
                                 optimizer = NelderMead())
 
-
-    Fits centred obj to binary image by adjusting centre coordinates and dimentions
-    `x0` - staring vector 
+Fits centred obj to binary image by adjusting centre coordinates and dimentions
+`x0` - staring vector 
 """
     function fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix,x0=nothing;
                                 optimizer = NelderMead()) 
@@ -333,7 +390,6 @@ not within the CentreObj set to true.  See also `is_within`
 Fits `CentredObj` (modified) to filtered image (not modified)
 `fit_reduced` flag (default=true) indicates what version of the image should be fitted if true - 
 reduced otherwise - full image 
-
 """
     function fit_centred_obj!(c::CentredObj,image::FilteredImage,x0=nothing;fit_reduced::Bool=true) 
         return fit_reduced ? fit_centred_obj!(c,reduced_image_flag(image),x0) : fit_centred_obj!(c,full_image_flag(image),x0)
@@ -342,8 +398,7 @@ reduced otherwise - full image
     """
 
 Function returns the function to evaluate the discrepancy  between 
-`CentredObj` and the matrix, this function is used during the fitting procedure
-    
+`CentredObj` and the matrix, this function is used during the fitting procedure 
 """    
     function image_fill_discr(image::AbstractMatrix,c::CentredObj)
          im_copy = copy(image)   
@@ -378,7 +433,6 @@ end
 
 Creates object from parameters vector, first two arguments are center
 point other are dimentions [center[1],center[2],dimentions[1],...]
-
 """
     function obj_from_vect(::Type{T},v::AbstractVector) where T<:CentredObj
             c = T() # empty constructor calling
@@ -390,7 +444,6 @@ point other are dimentions [center[1],center[2],dimentions[1],...]
     fill_from_vect!(c::CentredObj, v::AbstractVector)
 
 Fills CentreObj parameters from the vector [center_index_1,center_index_2,dimention_1,dimention_2,...]
-
 """
     function fill_from_vect!(c::CentredObj, v::AbstractVector)
         @assert length(c)==Base.length(v)
@@ -401,8 +454,7 @@ Fills CentreObj parameters from the vector [center_index_1,center_index_2,diment
     end
     #-------------------------CIRCLE-OBJ---------------------------
 """
-    Circle object with defined diemeter
-
+Circle object with defined diemeter
 """
     mutable struct CircleObj <:CentredObj
         center::MVector{2,Int} # central point location (indices)
@@ -422,7 +474,6 @@ Fills CentreObj parameters from the vector [center_index_1,center_index_2,diment
     fill_x0!(x0,im_bin::FlagMatrix,::CircleObj)
 
 Fills starting vector for the optimization of `CentredObj`
-
 """
     function fill_x0!(x0,im_bin::FlagMatrix,::CircleObj)
 
@@ -437,8 +488,6 @@ Fills starting vector for the optimization of `CentredObj`
     line_within_mask(c::CircleObj,ang,line_length)
 
 Returns two endpoints of the line lying totally inside the `CentredObj`
-
-
 """
 function line_within_mask(c::CircleObj,ang,line_length) 
         ang %= 360
@@ -452,7 +501,7 @@ function line_within_mask(c::CircleObj,ang,line_length)
                        c.center[1] +  lcos,
                        c.center[2] +  lsin]
     end
-    function convert_to_drawavable(c::CircleObj;fill=false,thickness::Int=-1)
+    function convert_to_drawable(c::CircleObj;fill=false,thickness::Int=-1)
         if (thickness==-1)&& !fill
             thickness = int_floor(0.17*diameter(c))
         end
@@ -460,9 +509,8 @@ function line_within_mask(c::CircleObj,ang,line_length)
     end
     #-----------------------SQUARE-OBJ---------------------------
     """
-    Square with defined center and side
-
-    """
+Square with defined center and side
+"""
     mutable struct SquareObj <:CentredObj
         center::MVector{2,Int}
         dimensions::MVector{1,Int} # side length
@@ -565,17 +613,17 @@ rearranged_diagonal(c::Union{SquareObj,CircleObj}) = begin
     end
     diagonal_points(c::RectangleObj) = begin
         (a,b) = side(c)
-        a=int_floor_fld(a,2)
-        b=int_floor_fld(b,2)
-        return (c.center[1]-b , c.center[2]-a, c.center[1]+b , c.center[2]+a)
+        a=int_floor_fld(a,2) # corresponds to vertical size(row index)
+        b=int_floor_fld(b,2) # horizontal side (column index)
+        return (c.center[1]-a , c.center[2]-b, c.center[1]+a , c.center[2]+b)
     end
     rearranged_diagonal(c::RectangleObj) = begin
         (a,b) = side(c)
         a=int_floor_fld(a,2)
         b=int_floor_fld(b,2)
-        return (c.center[2]-a,c.center[1]-b , c.center[2]+a, c.center[1]+b )
+        return (c.center[2]-b,c.center[1]-a , c.center[2]+b, c.center[1]+a )
     end
-    function convert_to_drawavable(c::Union{RectangleObj,SquareObj};kwargs...)
+    function convert_to_drawable(c::Union{RectangleObj,SquareObj};kwargs...)
         return  ImageDraw.Polygon(ImageDraw.RectanglePoints(rearranged_diagonal(c)...))
     end
 
@@ -593,7 +641,7 @@ rearranged_diagonal(c::Union{SquareObj,CircleObj}) = begin
         return atand(a/b)
     end
     function line_within_mask(c::RectangleObj,ang,line_length) 
-        a,b = side(c)
+        b,a = side(c) # here we interchange the sides
         ang %=360
         rect_ang = diag_ang(c)
         if ((90-rect_ang)<=ang<=(180-rect_ang)) || ((270-rect_ang)<=ang<=(360-rect_ang))
@@ -627,13 +675,12 @@ rearranged_diagonal(c::Union{SquareObj,CircleObj}) = begin
         `filter_image(imag::RescaledImage,markers;label=0)`
 
 Funtion zeroes all pixels of the image, except those belonging to the specified pattern.
-    `image` - rescaled image (see [`RescaledImage`](@ref) type)
-    `markers` - the matrix of the same size as the input image, each element of this matrix has unique value-label associated with some pattern.  Function `label_components` returns the markers matrix.
+`image` - rescaled image (see [`RescaledImage`](@ref) type)
+`markers` - the matrix of the same size as the input image, each element of this matrix has unique value-label associated with some pattern.  Function `label_components` returns the markers matrix.
 (optional) - the value of the label to be selected as a pattern marker
 
-Function returns `FIlteredImage` type object
-		
-	    """
+Function returns [`FIlteredImage`](@ref) object
+"""
     function filter_image(imag::RescaledImage,markers::Matrix{Int};label=0)
         # function extracts from markerd image
         # markers - the matrix with all labeled elements
@@ -673,6 +720,7 @@ if external  is true than as a filtering flag the inverse of centered object ima
 """
    filter_image(imag::AbstractMatrix,c::CentredObj;external=false) = filter_image!(copy(imag),cent_to_flag(c,size(imag),external= !external))
    filter_image(imag,flag::FlagMatrix) =  filter_image!(copy(imag),flag)
+   filter_image(imag::RescaledImage;label = 0) = filter_image(imag,marker_image(imag),label=label)
    """
     filter_image(imag::RescaledImage,c::CentredObj;external=false)
 
@@ -790,7 +838,7 @@ using `is_temperature_file`, values - are temperature pairs of `Float64` => `ful
 When file name contains "_BB_" it supposed to be the blackbody themperature distribution
         
 """
-    function find_temperature_files(folder::AbstractString=default_images_folder[])
+function find_temperature_files(folder::AbstractString=default_images_folder[])
 
         files = Dict{String,Pair{Float64,String}}()
         for file in readdir(folder)
@@ -816,33 +864,42 @@ When file name contains "_BB_" it supposed to be the blackbody themperature dist
     """
         `is_temperature_file(file_name::AbstractString)`
 
-        Checks if the file with `file_name` has an appropriate name for thermovisor temperature distribution file
-    
-    """
+Checks if the file with `file_name` has an appropriate name for thermovisor temperature distribution file
+"""
     is_temperature_file(file_name::AbstractString)=match(r"_T([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]).csv",file_name)
     
-    function mean_within_mask(img::AbstractMatrix,c::CentredObj)
+    """
+    mean_within_mask(img::AbstractMatrix,c::CentredObj)
+
+Evaluates the average temperature of all points within the `CentredObj` marker
+"""
+function mean_within_mask(img::AbstractMatrix,c::CentredObj)
         flt = Iterators.filter(i->is_within(c,i),keys(img))
         return Statistics.mean(i->img[i],flt)
     end
-    function std_within_mask(img::AbstractMatrix, c::CentredObj)
+
+    """
+    std_within_mask(img::AbstractMatrix, c::CentredObj)
+
+Evaluates standard deviation of temperature for all points within the `CentredObj` marker
+"""
+function std_within_mask(img::AbstractMatrix, c::CentredObj)
         flt = Iterators.filter(i->is_within(c,i),keys(img))
         mpper = Iterators.map(i->img[i],flt)
         return Statistics.std(mpper)
     end
     """
-		Function evaluates the matrix values distribution along the line specified by two coordinates, 
-        img - input image 
-		returns the tuple of two vectors: coordinates and values 
-    
-    see [`ImageDraw.bresenham(img, y0, x0, y1, x1, color)`](@ref)
+    along_line_distribution(img::AbstractMatrix{T},x0,y0,x1,y1) where T
 
-    returns 
-    points - vector of coordinates along the line
-    distrib - distribution
-
+Function evaluates the matrix values distribution along the line specified by two coordinates, 
+img - input image 
+returns the tuple of two vectors: coordinates and values 
+see [`ImageDraw.bresenham(img, y0, x0, y1, x1, color)`](@ref) for details of finding coordinates
+returns 
+points - vector of coordinates along the line
+distrib - distribution
 """
-   function along_line_distribution(img::AbstractMatrix{T},x0,y0,x1,y1) where T
+function along_line_distribution(img::AbstractMatrix{T},x0,y0,x1,y1) where T
             dx = abs(x1 - x0)
             dy = abs(y1 - y0)
 
@@ -874,7 +931,6 @@ When file name contains "_BB_" it supposed to be the blackbody themperature dist
     add_distrib_point!(points,distrib,point,value)
 
 Internal fucntion to add the point to distribution
-
 """
 add_distrib_point!(points,distrib,point,value) = begin
         Base.push!(points,point)
@@ -887,10 +943,9 @@ Evaluates the value matrix content along the line with endpoint coordinates x0,y
 returns indices of all points. As far as Wu's algorithm returns two adjacent points
 the value is evaluated as an average of two point obtained with Wu's algorithm
 
-see  `xiaolin_wu` function from `ImageDraw`
-        
+see  `xiaolin_wu` function from `ImageDraw` 
 """
-        function along_line_distribution_xiaolin_wu(img::AbstractMatrix{T}, y0, x0, y1, x1) where T
+function along_line_distribution_xiaolin_wu(img::AbstractMatrix{T}, y0, x0, y1, x1) where T
             dx = x1 - x0
             dy = y1 - y0
 
