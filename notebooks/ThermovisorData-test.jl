@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.8
+# v0.20.6
 
 using Markdown
 using InteractiveUtils
@@ -27,16 +27,16 @@ begin# we need the project structrue inside the notebook
 end;
 
 # ╔═╡ 051044c5-760c-4b60-90fc-82a347c3b6bc
-using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO
+using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO,Optim
 
 # ╔═╡ e71f123c-284e-4107-8231-4031873f122c
-using Main.ThermovisorData # it always fails on the first run when Revise is use 
+using Main.ThermovisorData # it always fails on the first run when Revise is in  use 
 
 # ╔═╡ 4460f260-f65f-446d-802c-f2197f4d6b27
 md"""
 ### This notebook demostrates main features of `ThermovisorData.jl` package
 #
-**ThervisorData.jl** is a small package designed to process static thermal images stored as matrices. Each matrix element represents a temperature value. This package enables users to load images from csv files, calculate temperature distributions, and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
+**ThervisorData.jl** is a small package designed to process static thermal images stored as matrices. Each matrix element represents a temperature value. This package enables users to load images from csv files, calculate temperature distributions, and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (regions that stand out from the background).
 
 The image can also be filtered to remove all other patterns from the image except the one with selected mark.
 
@@ -61,7 +61,7 @@ md" default image saving folder $(@bind image_save_folder PlutoUI.TextField(defa
 
 # ╔═╡ f6c1be87-94d2-4b08-a52d-6eb637192ee8
 includet(joinpath(sources_path,"ThermovisorData.jl"))
-# include(joinpath(sources_path,"ThermovisorData.jl")) 
+# include(joinpath(sources_path,"ThermovisorData.jl")) #replace includet with include if Revise is not needed
 
 # ╔═╡ 870113c3-b439-4d34-90d8-fdd8a158f9dd
 md"""
@@ -101,9 +101,9 @@ md"""
 	Select marker type and adjust it's centre coordinates and dimentions, use sliders to move the ROI over the image:	
 
 	marker type = $(@bind test_mask_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) \
-	center point row index = $(@bind test_mask_center_x Slider(1:1000,default=100,show_value=true)) \
-	center point column index = $(@bind test_mask_center_y Slider(1:1000,default=100,show_value=true)) \
-	side a= $(@bind test_side_a Slider(1:1000,default=100,show_value=true)) 
+	center point row index = $(@bind test_mask_center_x Slider(1:1000,default=200,show_value=true)) \
+	center point column index = $(@bind test_mask_center_y Slider(1:1000,default=200,show_value=true)) \
+	side a= $(@bind test_side_a Slider(1:1000,default=150,show_value=true)) 
 	side b= $(@bind test_side_b Slider(1:1000,default=100,show_value=true))
 
 	show marker on separate image = $(@bind is_make_obj_selfy CheckBox(false))
@@ -200,10 +200,18 @@ save_distr ? savefig(joinpath(notebook_path,"heatmap.png")) : nothing
 md"""
 
 ###  4,5. Fitting marker and Evaluating radial and angular temperature distributions
+
+This segment illustrates an example of temperature distribution within the Region of Interest (ROI) calculation, as well as how the heated object is fitted within this analysis.
+
 """
 
 # ╔═╡ 6d37916c-7895-49d3-b8a3-c8661050ebcb
-md" Use Wu algorithm? $(@bind is_use_wu CheckBox(default=false))"
+md"""
+There are two algorithms available for drawing a line within an image. One of these is the `xiaolin_wu` function from the `ImageDraw` package. This algorithm produces two coordinates for every point along the line, and the resulting temperature for each position is calculated as the average of these two points. Another algorithm is based on `ImageDraw.bresenham` it is used by default.
+
+Try Xiaolin-Wu algorithm? $(@bind is_use_wu CheckBox(default=false))
+
+"""
 
 # ╔═╡ 6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
 md"mm per pixel calibration value = $(mm_per_pixel[])"
@@ -211,13 +219,12 @@ md"mm per pixel calibration value = $(mm_per_pixel[])"
 # ╔═╡ c67290fc-6291-4f3e-a660-a3c4afa3a5e3
 md"""
 	Creating mask object:
-
-	image type = $(@bind image_type Select(["filtered", "filtered full","not filtered"]))
-	mask type = $(@bind mask_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) \
-	center point x= $(@bind mask_center_x Slider(1:1000,default=100,show_value=true)) \
-	center point y= $(@bind mask_center_y Slider(1:1000,default=100,show_value=true)) \
-	side a= $(@bind side_a Slider(1:1000,default=100,show_value=true)) \
-	side b= $(@bind side_b Slider(1:1000,default=100,show_value=true))
+	image type = $(@bind image_type Select(["filtered", "filtered full","not filtered"])) \
+	ROI type = $(@bind mask_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) \
+	center point x= $(@bind mask_center_x Slider(1:1000,default=200,show_value=true)) \
+	center point y= $(@bind mask_center_y Slider(1:1000,default=200,show_value=true)) \
+	side a= $(@bind side_a Slider(1:1000,default=150,show_value=true)) \
+	side b= $(@bind side_b Slider(1:1000,default=150,show_value=true))
 
 	"""
 
@@ -232,7 +239,7 @@ begin
 end
 
 # ╔═╡ 71eb240a-5a45-4bf3-b35c-a5820ca6da6c
-md" Fit the mask ? $(@bind is_fit_mask CheckBox(false))"
+md" Hitting this checkbox forces the ROI to fit the temperature pattern $(@bind is_fit_mask CheckBox(false))"
 
 # ╔═╡ 768535e0-a514-4dff-ac8b-0d7ca126149c
 # fitting the loaded image
@@ -260,10 +267,14 @@ end;
 # ╔═╡ 5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
 fitted_obj
 
+# ╔═╡ 59f9a7f2-9601-431c-a897-543fa25c64c4
+fitted_obj
+
 # ╔═╡ e1ccfd33-3d54-4249-86f1-381a1ef90615
 md"""
- 	direction angle in degrees = $(@bind direction_angle Slider(0:1:360,show_value=true,default=45))
-	line length in $(is_fit_mask ? "mm" : "pixels" )= $(@bind line_length Slider(0.1:0.1:250,show_value=true,default=20))
+The upper figure shows the ROI and the inclined line which goes through its center. By adjusting ROI position, the orientation and the length of this line temperature distribution of some feature can be studied. \
+ 	direction angle in degrees = $(@bind direction_angle Slider(0:1:360,show_value=true,default=45)) \
+	line length in $(is_fit_mask ? "mm" : "pixels" )= $(@bind line_length Slider(0.1:0.1:250,show_value=true,default=100))
 """
 
 # ╔═╡ 42a7b186-aa04-4249-a129-bf925f181008
@@ -331,22 +342,31 @@ end;
 md"""
 ###  6. Fitting multiple ROI objects to the image with several temperature features
 
-In this block we are going to create the image with randomly distributed multiple patterns and fit multiple `CentredObj`s to this image. 
+In this block we are going to create the image with multiple randomly distributed  patterns and fit a vector of  `CentredObj` ROIs to this image by calling `ThermovisorData.fit_all_patterns` function.
+
 """
 
 # ╔═╡ 10954f10-9414-4839-872f-c2516d5d8e4e
-@bind fit_multiple Button("Regenerate patterns")
+md"""
+	Click this button to generate the image pattern $(@bind fit_multiple Button("Regenerate patterns"))
+	"""
+
+# ╔═╡ 6e728ea6-38be-437a-96b4-9fa084f8fec5
+md"""
+Select objects ROI type = $(@bind multifit_roi_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) 
+"""
 
 # ╔═╡ cc909b53-ed4d-44a1-a410-ff25533afc2d
 md"Initial image with randomly distributed patterns"
 
 # ╔═╡ d5b6f453-5e92-41e6-a45f-cb75660bc198
-begin 
+begin # generating pattern 
 	fit_multiple
-	Patterns_number = 5 #total number of patterns
-	img = fill(0.0,640,480)# filling initial scene
-	rnd_centre() = [rand(1:640),rand(1:480)] # random center positions
-	rnd_diam() = rand(20:10:200) # random diameter generator
+	Patterns_number = 150 #total number of patterns
+	image_size = (480,640)
+	img = fill(0.0,image_size...)# filling initial scene
+	rnd_centre() = [rand(1:image_size[1]),rand(1:image_size[2])] # random center positions
+	rnd_diam() = rand(10:10:30) # random diameter generator
 	# filling the vector of initial ROIs
 	centered_objs = [CircleObj(rnd_centre(),rnd_diam()) for _ in 1:Patterns_number]
 	for c in centered_objs
@@ -355,15 +375,7 @@ begin
 	rs = RescaledImage(img)
 	markers = ThermovisorData.marker_image(rs)
 	
-	separate_patterns_number = 0 # now we need to check for the separate patterns number 
-	for i in 1:Patterns_number
-		for m in markers
-			if m==i
-				global separate_patterns_number=i
-				break
-			end
-		end
-	end
+	separate_patterns_number = maximum(markers) # now we need to check for the separate patterns number 
 	rgb_markers = ThermovisorData.draw(Float64.(markers))	# converting to rgb image
 end
 
@@ -371,21 +383,22 @@ end
 md"""Number of separate patterns:    $(separate_patterns_number)"""
 
 # ╔═╡ 0badf26a-38fa-45be-9704-d4e80b12a9cb
-md"Fit all objects $(@bind is_fit_multiple CheckBox(default=false))"
+md"""
+	Select this checkbox to fit all objects $(@bind is_fit_multiple CheckBox(default=false))
+	"""
 
 # ╔═╡ 6adfae4d-5137-4692-b9f3-3793c4c76202
 begin # fitting ROI's to image with several 
 	fit_multiple
 	if is_fit_multiple
-		centered_objs_to_fit = [CircleObj(rnd_centre(),rnd_diam()) for _ in 1:separate_patterns_number]
-		Threads.@sync for (i,c) in enumerate(centered_objs_to_fit)
-			Threads.@spawn ThermovisorData.fit_centred_obj!(c,markers.==i)
+
+		fitted_rois = ThermovisorData.fit_all_patterns(rs,multifit_roi_type)
+		rgb_image_multi_roi = draw!(img,fitted_rois[1],show_cross = true,fill=true)
+		for i in 2:length(fitted_rois)
+			 ThermovisorData.draw!(rgb_image_multi_roi,fitted_rois[i],thickness = 1,fill=true,show_cross = true)
 		end
-			rgb_image_multi_roi = draw!(img,centered_objs_to_fit[1],show_cross = false,fill=true)
-			for i in 2:length(centered_objs_to_fit)
-				 ThermovisorData.draw!(rgb_image_multi_roi,centered_objs_to_fit[i],thickness = 1,fill=true,show_cross = false)
-			end
-			rgb_image_multi_roi
+		rgb_image_multi_roi
+		#
 	else
 		nothing
 	end
@@ -432,12 +445,13 @@ end
 # ╟─768535e0-a514-4dff-ac8b-0d7ca126149c
 # ╟─5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
 # ╟─6d37916c-7895-49d3-b8a3-c8661050ebcb
-# ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
-# ╟─c67290fc-6291-4f3e-a660-a3c4afa3a5e3
+# ╠═6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
+# ╠═c67290fc-6291-4f3e-a660-a3c4afa3a5e3
 # ╟─4e1a5050-59b0-4d24-98bb-1520c06b28c5
 # ╟─42a7b186-aa04-4249-a129-bf925f181008
 # ╟─e1ccfd33-3d54-4249-86f1-381a1ef90615
 # ╟─b096c4f2-9dce-409d-874a-a851f577bf92
+# ╟─59f9a7f2-9601-431c-a897-543fa25c64c4
 # ╟─39e50296-21ff-4407-894f-2a380dc51e21
 # ╟─ca05bd4f-5656-4531-b357-331c62661174
 # ╟─71eb240a-5a45-4bf3-b35c-a5820ca6da6c
@@ -446,6 +460,7 @@ end
 # ╟─b4ce12e3-29ec-41ac-89d3-06d08ef2beca
 # ╟─764a320c-ff6b-48d0-a5b4-48a3df3ece01
 # ╟─10954f10-9414-4839-872f-c2516d5d8e4e
+# ╟─6e728ea6-38be-437a-96b4-9fa084f8fec5
 # ╟─cc909b53-ed4d-44a1-a410-ff25533afc2d
 # ╟─d5b6f453-5e92-41e6-a45f-cb75660bc198
 # ╟─96ad6e27-52dd-41aa-b115-f852049a485a

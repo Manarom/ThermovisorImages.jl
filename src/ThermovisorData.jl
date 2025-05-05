@@ -49,7 +49,7 @@ the scene.
     const int_floor = Int ∘ floor
     const int_floor_fld = Int ∘ floor ∘ fld
     const DefColorScheme = Ref("HEAT")
-    
+    const DEFAULT_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1,iterations=30))
     """
 	    RescaledImage - structure stores the image data mapped to region  [0,1]
 Fields:
@@ -154,10 +154,28 @@ To impement `CentredObj` abstraction one needs to implement:
 fitting the image
 
 [`convert_to_drawable`](@ref) fucntion to convert the [`CentredObj`](@ref) to a drawable obj for `ImageDraw`
+
+[`parnumber`](@ref) function which returns the number of parameters     
+
 """
 abstract type CentredObj end 
     
-    
+"""
+    parnumber(::Type{T}) where T<:CentredObj
+
+Returns total number of parameters needed to create new object
+"""
+function parnumber(::Type{T}) where T<:CentredObj    error(DomainError(T,"Undefined parnumber method")) end
+
+"""
+    (::Type{T})() where T<:CentredObj
+
+Empty object constructor
+"""
+function (::Type{T})() where T<:CentredObj
+    N = parnumber(T)
+    obj_from_vect(T,Vector{Int}(undef,N))
+end
     """
         copyobj(c::T) where T<:CentreObj
 
@@ -171,8 +189,8 @@ Copies the [`CentredObj`](@ref) creating new instance
 
 Total number of values needed to create [`CentredObj`](@ref) of specified type
 """
-function Base.length(c::CentredObj) 
-        return Base.length(c.dimensions) + 2
+function Base.length(::T) where T<:CentredObj
+        return parnumber(T)
     end 
     """
     is_within(c::CentredObj,_)
@@ -232,7 +250,7 @@ function Base.setindex!(img::Matrix{T},x::Number,c::CentredObj) where T
     end
 
     """
-    shift(c::CentredObj,x::AbstractVector)
+    shift!(c::CentredObj,x::AbstractVector)
 
 Relative shift of centred object center
 """
@@ -252,16 +270,17 @@ line_length - the length of line
 """
 function line_within_mask(c::CentredObj,::Float64,::Int)  DomainError(typeof(c),"no implementation") end
     """
-Ealuates the surface area
+    area(c::CentredObj)
+
+Ealuates the surface area in pixels
 """
 function area(c::CentredObj) DomainError(typeof(c),"no implementation") end
     """
         fill_x0!(x0,im_bin::AbstractMatrix,c::CentredObj)
 
-
 Fills the optimization starting vector by seraching the centre of the image `im_bin`
 """
-function fill_x0!(x0,im_bin::AbstractMatrix,c::CentredObj) DomainError(typeof(c),"no implementation") end
+function fill_x0!(x0,im_bin::FlagMatrix,c::CentredObj) DomainError(typeof(c),"no implementation") end
     """
     convert_to_drawable(::CentredObj)
 
@@ -270,10 +289,10 @@ draw function, polygon,ellipse see [`ImageDraw.draw`] function
 """
 function convert_to_drawable(::CentredObj) end
     """
-	`fill_im!(img,c::CentreObj)`
-	
+    fill_im!(img,c::CentredObj)
+
 Fills bitmatrix `img` in a way that all pixels which are 
-within the CentreObj are set to true.  See also `is_within`
+within the `CentredObj` are true and false otherwise.  
 """
     function fill_im!(img,c::CentredObj)
         for i in keys(img)
@@ -282,7 +301,16 @@ within the CentreObj are set to true.  See also `is_within`
         end
         return img
     end
+"""
+    fill_vect!(x::AbstractVector, c::CentredObj)
 
+Converts `CentredObj` to vector
+"""
+function fill_vect!(x::AbstractVector, c::CentredObj)
+    x[1] = c.center[1];x[2]=c.center[2];
+    x[3:end] .= c.dimensions
+    return x
+end
     """
     draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=55,color::RGB{Float64}=RGB{Float64}(0,1,0), kwargs...)
 
@@ -344,7 +372,7 @@ function to_rgb(image::Matrix{Float64};color_scheme::String="")
 
 Returns `CentredObj` image of minimal possible size
 """
-    function draw(c::CentredObj;kwargs...) 
+function draw(c::CentredObj;kwargs...) 
         (x_left,y_left,x_right,y_right) = abs.(diagonal_points(c))
         image = fill(0.0,[y_right+y_left,x_right + x_left]...)
         image[1,1]=0.001            
@@ -383,39 +411,106 @@ not within the CentreObj set to true.  See also `is_within`
         return img
     end    
     """
-    fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix,x0=nothing;
-                                optimizer = NelderMead())
+    fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix;
+                                starting_point::Union{Nothing,Vector{Float64}}=nothing,
+                                optimizer::Optim.ZerothOrderOptimizer = Optim.NelderMead(), 
+                                options::Optim.Options=Optim.Options())
 
-Fits centred obj to binary image by adjusting centre coordinates and dimentions
-`x0` - staring vector 
+Fits [`CentredObj`](@ref) to binary image pattern (region of units) by adjusting centre coordinates and dimentions
+using zeroth-order optimizers from `Optim.jl` package.
+
+Input variables:
+
+c - `CentredObj` (modified)   
+
+im_bin - binarized image (BitMatrix or Matrix{Bool})
+
+(optional)
+
+starting_point - staring vector (uses [`fill_x0!`](@ref) function to fill starting point by default)
+
+optimizer - zeroth-order optimizer from `Optim.jl` package
+
+options  - optimization options from `Optim.jl` package
+
 """
-function fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix,x0=nothing;
-                                optimizer = NelderMead()) 
+function fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix;
+                                starting_point::Union{Nothing,Vector{Float64}}=nothing,
+                                optimizer::Optim.ZerothOrderOptimizer = Optim.NelderMead(), 
+                                options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) 
+
         optim_fun = image_fill_discr(im_bin,c) 
-	    if isnothing(x0)
-            x0 = Vector{Float64}(undef,length(c))
+        x0 = Vector{Float64}(undef,length(c))
+	    if isnothing(starting_point)
 		    fill_x0!(x0,im_bin,c)
+        else
+            x0 = copyto!(x0,starting_point)
 	    end
-	    optim_out = optimize(optim_fun,x0,optimizer)
-        optim_fun = nothing
+	    optim_out = optimize(optim_fun,x0,optimizer,options)
 	    return (c,Optim.minimum(optim_out),optim_out)
     end
     """
-    fit_centred_obj!(c::CentredObj,image::FilteredImage,x0=nothing;fit_reduced::Bool=true)
+    fit_centred_obj!(c::CentredObj,image::FilteredImage;
+                                        starting_point::Union{Nothing,Vector{Float64}}=nothing,fit_reduced::Bool=true,
+                                        optimizer::Optim.ZerothOrderOptimizer = NelderMead(),options::Optim.Options=DEFAULT_FITTING_OPTIONS[])
 
-Fits `CentredObj` (modified) to filtered image (not modified)
+Fits [`CentredObj`](@ref) (modified) to filtered image (not modified)
 `fit_reduced` flag (default=true) indicates what version of the image should be fitted if true - 
-reduced otherwise - full image 
+reduced otherwise - full image. For other input arguments see [`fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix)`](@ref)
 """
-function fit_centred_obj!(c::CentredObj,image::FilteredImage,x0=nothing;fit_reduced::Bool=true) 
-        return fit_reduced ? fit_centred_obj!(c,reduced_image_flag(image),x0) : fit_centred_obj!(c,full_image_flag(image),x0)
+function fit_centred_obj!(c::CentredObj,image::FilteredImage;
+                                        starting_point::Union{Nothing,Vector{Float64}}=nothing,fit_reduced::Bool=true,
+                                        optimizer::Optim.ZerothOrderOptimizer = NelderMead(),options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) 
+        return fit_reduced ? fit_centred_obj!(c,reduced_image_flag(image),starting_point=starting_point,optimizer = optimizer,options=options) : fit_centred_obj!(c,full_image_flag(image),starting_point=starting_point,optimizer = optimizer,options=options)
     end
-
     """
+    fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
+                                            level_threshold::Float64=0.8,
+                                            distance_threshold::Float64=1e-3,
+                                            max_centred_objs::Int=100,
+                                            optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
+                                            options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
+
+Function fits all patterns of the image `img` to the vector of [`CentredObj`](@ref) ROI objects. 
+The type of ROI should be provided as a second arguments (by default it is a [`CircleObj`](@ref))
+
+img - input image of [`RescaledImage`](@ref) type
+
+For other input arguments see [`marker_image`](@ref) and [`fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix)`](@ref)
+"""
+function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
+                                            level_threshold::Float64=0.8,
+                                            distance_threshold::Float64=1e-3,
+                                            max_centred_objs::Int=200,
+                                            optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
+                                            options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
+                                            
+            markers = marker_image(img,level_threshold=level_threshold,distance_threshold=distance_threshold)     
+            markers_number = count_separate_patterns(markers)       
+            markers_number=minimum((markers_number,max_centred_objs))    
+            if markers_number<=0 
+                 return Vector{T}([])  
+            else
+                centered_objs_to_fit = [T() for _ in 1:markers_number]
+            end
+            Threads.@sync for (i,c) in enumerate(centered_objs_to_fit)
+                Threads.@spawn ThermovisorData.fit_centred_obj!(c,markers.==i,optimizer = optimizer,options = options)
+            end
+            return centered_objs_to_fit
+    end  
+"""
+    count_separate_patterns(markers::Matrix{Int})
+
+This function takes matrix of markers see [`marker_image`](@ref) and calculates the number of separate patterns
+"""
+function   count_separate_patterns(markers::Matrix{Int})
+    return maximum(markers)
+end
+    """
+    image_fill_discr(image::AbstractMatrix,c::CentredObj)
 
 Function returns the function to evaluate the discrepancy  between 
 `CentredObj` and the matrix, this function is used during the fitting procedure 
-
 """    
 function image_fill_discr(image::AbstractMatrix,c::CentredObj)
          im_copy = copy(image)   
@@ -481,6 +576,7 @@ Circle object with defined diemeter
         end
         CircleObj() = new(MVector{2}(1,1),MVector{1}(1))
     end
+    parnumber(::Type{CircleObj}) = 3
     diameter(c::CircleObj) = c.dimensions[]
     radius(c::CircleObj) = c.dimensions[]/2
     side(c::CircleObj) = diameter(c)
@@ -537,6 +633,7 @@ Square with defined center and side
         end
         SquareObj() = new(MVector{2}(1,1),MVector{1}(1))
     end
+    parnumber(::Type{SquareObj}) = 3
     area(c::SquareObj)=^(c.dimensions[],2)
     side(c::SquareObj) = c.dimensions[]
 
@@ -619,6 +716,7 @@ rearranged_diagonal(c::Union{SquareObj,CircleObj}) = begin
         end
         RectangleObj() = new(MVector{2}(1,1),MVector{2}(1,1))
     end
+    parnumber(::Type{RectangleObj}) = 4
     area(c::RectangleObj)=*(side(c)...)
     side(c::RectangleObj) = (c.dimensions[1],c.dimensions[2])
     is_within(c::RectangleObj,inds::AbstractVector) = begin
@@ -1036,11 +1134,11 @@ this line lies within the mask (`CentreObj`) and goes through its center.
 
 Function returns:
 
-        `points`  - vector of `CartesianIndex` of image's points lying on the line
+points  - vector of `CartesianIndex` of image's points lying on the line
 
-        `distrib` - distribution of values
+distrib - distribution of values
 
-        `line_points` - endpoints of line the Tupple of (left_x,left_Y,right_x,right_y)
+line_points - endpoints of line the Tupple of (left_x,left_Y,right_x,right_y)
 
 """
     function within_mask_line_points_distribution(imag::AbstractMatrix,c::CentredObj,
@@ -1118,8 +1216,10 @@ Input arguments `along_length`, `distrib` -  distribution matrix. All rows of di
 droped.
 
 Optional:
-    `max_length` - maximal value of along_length_coordinate to be includet in to the statistics evaluation
-    `is_use_student` - flag if use students's coefficient
+
+max_length - maximal value of along_length_coordinate to be includet in to the statistics evaluation
+
+is_use_student - flag if use students's coefficient
 
 """
 function radial_distribution_statistics(along_length_coordinate::AbstractVector,distrib::AbstractVecOrMat;
@@ -1133,9 +1233,9 @@ function radial_distribution_statistics(along_length_coordinate::AbstractVector,
     """
     _inbounds_flag(L,D,max_length,min_length)
 
-    Unsafe version of check! number of  rows in `D` should be the same as the number of 
-    elements in `L`
-    Returns Bool flag of all row not containing NaN's and lying within the min_length to max_length range
+Unsafe version of check! number of  rows in `D` should be the same as the number of 
+elements in `L`
+Returns Bool flag of all row not containing NaN's and lying within the min_length to max_length range
 """
 function _inbounds_flag(L,D,max_length,min_length)
         not_nan_flag = Vector{Bool}(undef,size(D,1)) 
@@ -1194,7 +1294,6 @@ function angular_distribution_statistics(angles,along_length_coordinate,distrib;
     points_within_line!(imag::AbstractMatrix,line_points::AbstractVector)
 
 Forces all line points to lie within the possible region according toe the image size
-
 """
 function points_within_line!(imag::AbstractMatrix,line_points::AbstractVector)
         sz = size(imag)

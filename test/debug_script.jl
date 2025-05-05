@@ -21,7 +21,7 @@ rect = ThermovisorData.obj_from_vect(ThermovisorData.RectangleObj,[50,80,100,100
 # simple wrapper around the image labeling functions from 
 markers= ThermovisorData.marker_image(img)
 flt = ThermovisorData.filter_image(img,markers)
-ThermovisorData.fit_centred_obj!(circle,flt,nothing,fit_reduced=true)
+ThermovisorData.fit_centred_obj!(circle,flt,fit_reduced=true)
 ThermovisorData.draw!(copy(flt.reduced),circle)
 ThermovisorData.draw!(copy(flt.reduced),square)
 ThermovisorData.draw!(copy(flt.reduced),rect,fill=false)
