@@ -1,8 +1,8 @@
 source_dir = joinpath(abspath(joinpath(@__DIR__, "..")),"src")
 
-using Revise
+using Revise,ImageShow,Images
 includet(joinpath(source_dir,"ThermovisorData.jl"))
-
+#=
 #include(joinpath(source_dir,"ThermovisorData.jl"))
 
 # search all files in dir 
@@ -57,3 +57,32 @@ ThermovisorData.fill_x0!(x0,immm_flag,square)
 ThermovisorData.fill_x0!(x0,immm_flag,circle)
 
 ThermovisorData.fill_x0!([0.0,x0...],immm_flag,rect)
+=#
+
+img = ThermovisorData.read_temperature_file(raw".\thermal images\2025-05-30 13-55-16_T600-2.csv")[1]
+
+markers = ThermovisorData.marker_image(img)
+simshow(markers)
+
+function sort_markers_by_area!(markers::Matrix{Int};total_number::Int = -1)
+    max_label = maximum(markers)
+	if max_label <=0
+		return nothing
+	end
+    if total_number <=0 || total_number >max_label 
+        total_number = max_label
+    end
+    sums = Vector{Float64}(undef,max_label)
+    inds = Vector{Int}(undef,max_label)
+	flag = similar(markers,Bool)
+	v = @view markers[markers .== 1]
+	ViewsVect = Vector{typeof(v)}(undef,total_number)
+    Threads.@threads for i in 1:max_label
+        sums[i] = sum(m->m==i,markers)
+    end
+    sortperm!(inds,sums)
+	markers_new = fill(0,size(markers))
+    for i in 1:max_label
+        v = @view markers_new[markers .==i]
+    end
+end

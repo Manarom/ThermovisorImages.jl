@@ -506,6 +506,21 @@ This function takes matrix of markers see [`marker_image`](@ref) and calculates 
 function   count_separate_patterns(markers::Matrix{Int})
     return maximum(markers)
 end
+function sort_markers_by_area!(markers::Matrix{Int};total_number::Int = -1)
+    max_label = count_separate_patterns(markers)
+    if total_number <=0 || total_number >max_label 
+        total_number = max_label
+    end
+    sums = Vector{Float64}(undef,max_label)
+    inds = Vector{Int}(undef,max_label)
+    Threads.@threads for i in 1:max_label
+        sums[i] = sum(m->m==i,markers)
+    end
+    sortperm!(inds,sums)
+    for i in 1:max_label
+        v = @view markers[markers .==i]
+    end
+end
     """
     image_fill_discr(image::AbstractMatrix,c::CentredObj)
 
