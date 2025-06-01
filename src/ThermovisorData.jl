@@ -101,7 +101,90 @@ im - image with all values from 0 to 1
         reduced::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
         reduced_flag::SubArray{Bool,2,BitMatrix,Tuple{UnitRange{Int},UnitRange{Int}},false}
     end
+
+
+    """
+    sort_markers_by_area!(markers::Matrix{Int};total_number::Int = -1,rev::Bool=true)
+
+Function sorts in-place the matrix of markers by the value of pattern areas
+"""
+function sort_markers_by_area!(markers::Matrix{Int};total_number::Int = -1,rev::Bool=true)
+        max_label = maximum(markers)
     
+        if total_number <=0 || total_number >max_label 
+            total_number = max_label
+        end
+        sums = Vector{Float64}(undef,max_label)
+        inds = Vector{Int}(undef,max_label)
+        flag = similar(markers,Bool)
+        map!(i->i==1 ,flag, markers)
+        v = @view markers[flag]
+        ViewsVect = Vector{typeof(v)}(undef,total_number)
+        ViewsVect[1] = v
+        for i in 2:max_label
+            map!(m->m==i ,flag, markers)
+            ViewsVect[i] = @view markers[flag] 
+        end
+        map!(sum,sums,ViewsVect)
+        sortperm!(inds,sums,rev=rev)
+        for i = 1:total_number
+            fill!(ViewsVect[inds[i]],i)
+        end
+        if total_number<max_label
+            for i in total_number+1:max_label
+                fill!(ViewsVect[inds[i]],0)
+            end
+        end
+        return markers
+ end
+struct MarkeredImage{ViewType}
+    markers::Matrix{Int} # this stores the matrix of markers
+    flag::Matrix{Bool}
+    ViewsVect::Vector{ViewType} # this type of image view for various flags 
+    MarkeredImage(markers::Matrix{Int}) = begin
+        #inds = Vector{Int}(undef,max_label)
+        flag = similar(markers,Bool)
+        max_label = maximum(markers)
+        map!(i->i==1 ,flag, markers)
+        v = @view markers[flag]
+        ViewsVect = Vector{typeof(v)}(undef,max_label)
+        ViewsVect[1] = v
+        for i in 2:max_label
+            map!(m->m==i ,flag, markers)
+            ViewsVect[i] = @view markers[flag] 
+        end
+        return new{typeof(v)}(markers,flag,ViewsVect)    
+    end
+ end
+ function Base.length(m::MarkeredImage)
+    return length(m.ViewsVect)
+ end
+ function Base.size(m::MarkeredImage)
+    return size(m.markers)
+ end
+function areas(m::MarkeredImage)
+    areas = Vector{Float64}(undef,length(m))
+    map!(sum,areas,m.ViewsVect)
+    return areas
+end
+ """
+    sort_reduce!(m::MarkeredImage;total_number::Int = -1,descending::Bool=true)
+
+Sorts and reduces the total number of patterns
+"""
+function sort_reduce!(m::MarkeredImage;total_number::Int = -1,descending::Bool=true)
+    max_label = length(m)
+
+    if total_number <=0 || total_number >max_label 
+        total_number = max_label
+    end
+    inds = Vector{Int}(undef,max_label)
+    areas = areas(m)
+    sortperm!(inds,areas,rev=descending)
+    for i = 1:total_number
+        fill!(m.ViewsVect[inds[i]],i)
+    end
+ end
     """
     full_image_flag(filtered_im::FilteredImage)
 
@@ -505,21 +588,6 @@ This function takes matrix of markers see [`marker_image`](@ref) and calculates 
 """
 function   count_separate_patterns(markers::Matrix{Int})
     return maximum(markers)
-end
-function sort_markers_by_area!(markers::Matrix{Int};total_number::Int = -1)
-    max_label = count_separate_patterns(markers)
-    if total_number <=0 || total_number >max_label 
-        total_number = max_label
-    end
-    sums = Vector{Float64}(undef,max_label)
-    inds = Vector{Int}(undef,max_label)
-    Threads.@threads for i in 1:max_label
-        sums[i] = sum(m->m==i,markers)
-    end
-    sortperm!(inds,sums)
-    for i in 1:max_label
-        v = @view markers[markers .==i]
-    end
 end
     """
     image_fill_discr(image::AbstractMatrix,c::CentredObj)
@@ -993,7 +1061,7 @@ function find_temperature_files(folder::AbstractString=default_images_folder[])
 
 Checks if the file with `file_name` has an appropriate name for thermovisor temperature distribution file
 """
-    is_temperature_file(file_name::AbstractString)=match(r"_T([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]).csv",file_name)
+is_temperature_file(file_name::AbstractString)=match(r"_T([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]).csv",file_name)
     
     """
     mean_within_mask(img::AbstractMatrix,c::CentredObj)
@@ -1271,7 +1339,7 @@ function _inbounds_flag(L,D,max_length,min_length)
         end
         return not_nan_flag
     end
-    function _eval_stats(L,D,is_use_student)
+function _eval_stats(L,D,is_use_student)
        mean_D = Vector{Float64}(undef,length(L))
        #@show size(mean_D)
        #@show size(D)

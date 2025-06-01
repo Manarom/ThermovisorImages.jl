@@ -64,25 +64,35 @@ img = ThermovisorData.read_temperature_file(raw".\thermal images\2025-05-30 13-5
 markers = ThermovisorData.marker_image(img)
 simshow(markers)
 
-function sort_markers_by_area!(markers::Matrix{Int};total_number::Int = -1)
+function sort_markers_by_area!(markers::Matrix{Int};total_number::Int = -1,rev::Bool=true)
     max_label = maximum(markers)
-	if max_label <=0
-		return nothing
-	end
+
     if total_number <=0 || total_number >max_label 
         total_number = max_label
     end
     sums = Vector{Float64}(undef,max_label)
     inds = Vector{Int}(undef,max_label)
 	flag = similar(markers,Bool)
-	v = @view markers[markers .== 1]
+    map!(i->i==1 ,flag, markers)
+	v = @view markers[flag]
 	ViewsVect = Vector{typeof(v)}(undef,total_number)
-    Threads.@threads for i in 1:max_label
-        sums[i] = sum(m->m==i,markers)
+    ViewsVect[1] = v
+    for i in 2:max_label
+        map!(m->m==i ,flag, markers)
+        ViewsVect[i] = @view markers[flag] 
     end
-    sortperm!(inds,sums)
-	markers_new = fill(0,size(markers))
-    for i in 1:max_label
-        v = @view markers_new[markers .==i]
+    map!(sum,sums,ViewsVect)
+    #=for i in 1:max_label
+        sums[i] = sum(ViewsVect[i])
+    end=#
+    sortperm!(inds,sums,rev=rev)
+    for i = 1:total_number
+        fill!(ViewsVect[inds[i]],i)
     end
+    if total_number<max_label
+        for i in total_number+1:max_label
+            fill!(ViewsVect[inds[i]],0)
+        end
+    end
+    return markers
 end
