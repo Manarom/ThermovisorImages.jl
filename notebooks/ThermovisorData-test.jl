@@ -362,7 +362,7 @@ md"Initial image with randomly distributed patterns"
 # ╔═╡ d5b6f453-5e92-41e6-a45f-cb75660bc198
 begin # generating pattern 
 	fit_multiple
-	Patterns_number = 150 #total number of patterns
+	Patterns_number = 10 #total number of patterns
 	image_size = (480,640)
 	img = fill(0.0,image_size...)# filling initial scene
 	rnd_centre() = [rand(1:image_size[1]),rand(1:image_size[2])] # random center positions
@@ -373,8 +373,7 @@ begin # generating pattern
 		img[c]=1 # centred objects can be used as indices in images 
 	end
 	rs = RescaledImage(img)
-	markers = ThermovisorData.marker_image(rs)
-	
+	markers = ThermovisorData.marker_image(rs,distance_threshold = 0.0)
 	separate_patterns_number = maximum(markers) # now we need to check for the separate patterns number 
 	rgb_markers = ThermovisorData.draw(Float64.(markers))	# converting to rgb image
 end
@@ -392,7 +391,7 @@ begin # fitting ROI's to image with several
 	fit_multiple
 	if is_fit_multiple
 
-		fitted_rois = ThermovisorData.fit_all_patterns(rs,multifit_roi_type)
+		fitted_rois = ThermovisorData.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0)
 		rgb_image_multi_roi = draw!(img,fitted_rois[1],show_cross = true,fill=true)
 		for i in 2:length(fitted_rois)
 			 ThermovisorData.draw!(rgb_image_multi_roi,fitted_rois[i],thickness = 1,fill=true,show_cross = true)
@@ -417,14 +416,40 @@ begin
 	end
 end
 
+# ╔═╡ 2af862c2-c026-43a8-82e3-77ff8cb2095c
+begin
+	im_coin = load(download("http://docs.opencv.org/3.1.0/water_coins.jpg"))
+	im_coin_float = 1 .- Float64.(Gray.(im_coin))
+	
+	rescaled_coin = ThermovisorData.RescaledImage(im_coin_float)
+	markers_coins = ThermovisorData.marker_image(rescaled_coin)
+	
+	fitted_rois_coins = ThermovisorData.fit_all_patterns(rescaled_coin,multifit_roi_type)
+	
+	rgb_image_coins = draw!(im_coin_float,fitted_rois_coins[1],show_cross = true,fill=true)
+	for i in 2:length(fitted_rois_coins)
+			 ThermovisorData.draw!(rgb_image_coins,fitted_rois_coins[i],thickness = 1,fill=true,show_cross = true)
+	end
+	rgb_image_coins
+end
+
+# ╔═╡ af244995-703d-4199-8c07-a9b8fab9ade4
+simshow(markers_coins.markers)
+
+# ╔═╡ 7d8f4848-8a73-4c50-bd05-fe564da2aa89
+fitted_rois_coins
+
+# ╔═╡ a0169426-f11b-4fff-860b-d393be15527a
+markers_number=minimum((length(markers_coins),200)) 
+
 # ╔═╡ Cell order:
 # ╟─4460f260-f65f-446d-802c-f2197f4d6b27
 # ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
-# ╟─fc6af4b0-1127-11f0-1b66-a59d87c5b141
-# ╟─051044c5-760c-4b60-90fc-82a347c3b6bc
+# ╠═fc6af4b0-1127-11f0-1b66-a59d87c5b141
+# ╠═051044c5-760c-4b60-90fc-82a347c3b6bc
 # ╟─215ed2f4-71ba-4cb5-b198-677d0d7ffb38
-# ╟─f6c1be87-94d2-4b08-a52d-6eb637192ee8
-# ╟─e71f123c-284e-4107-8231-4031873f122c
+# ╠═f6c1be87-94d2-4b08-a52d-6eb637192ee8
+# ╠═e71f123c-284e-4107-8231-4031873f122c
 # ╟─870113c3-b439-4d34-90d8-fdd8a158f9dd
 # ╟─c241bae6-1925-4be1-af41-44673f02617a
 # ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
@@ -459,12 +484,16 @@ end
 # ╟─e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
 # ╟─b4ce12e3-29ec-41ac-89d3-06d08ef2beca
 # ╟─764a320c-ff6b-48d0-a5b4-48a3df3ece01
-# ╟─10954f10-9414-4839-872f-c2516d5d8e4e
+# ╠═10954f10-9414-4839-872f-c2516d5d8e4e
 # ╟─6e728ea6-38be-437a-96b4-9fa084f8fec5
-# ╟─cc909b53-ed4d-44a1-a410-ff25533afc2d
-# ╟─d5b6f453-5e92-41e6-a45f-cb75660bc198
+# ╠═cc909b53-ed4d-44a1-a410-ff25533afc2d
+# ╠═d5b6f453-5e92-41e6-a45f-cb75660bc198
 # ╟─96ad6e27-52dd-41aa-b115-f852049a485a
 # ╟─0badf26a-38fa-45be-9704-d4e80b12a9cb
-# ╟─6adfae4d-5137-4692-b9f3-3793c4c76202
+# ╠═6adfae4d-5137-4692-b9f3-3793c4c76202
 # ╟─68b33b39-5ef5-4560-b4b2-1fe2f43a3628
 # ╟─8a132aba-aa8a-428a-84a2-0ab6e5e2b891
+# ╠═2af862c2-c026-43a8-82e3-77ff8cb2095c
+# ╠═af244995-703d-4199-8c07-a9b8fab9ade4
+# ╠═7d8f4848-8a73-4c50-bd05-fe564da2aa89
+# ╠═a0169426-f11b-4fff-860b-d393be15527a

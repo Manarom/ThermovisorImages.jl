@@ -3,16 +3,17 @@ module ThermovisorData
     using Plots,CSV
     using Colors, ColorVectorSpace
     using Dates,Statistics,LinearAlgebra
-    using ImageSegmentation,IndirectArrays
+    #using ImageSegmentation,IndirectArrays
     using Optim
     using LaTeXStrings
     using Distributions # to evaluate the Students coefficient
     using PerceptualColourMaps # to draw heatmaps
     using StaticArrays
     using Interpolations
+    using  FileTypes
     import ImageDraw
 
-    export RescaledImage,FilteredImage,
+    export RescaledImage,FilteredImage, MarkeredImage,
         full_image_flag,reduced_image_flag,draw!,
         draw,fit_centred_obj!,
         radius,diameter,area,side,center,
@@ -137,40 +138,76 @@ function sort_markers_by_area!(markers::Matrix{Int};total_number::Int = -1,rev::
         end
         return markers
  end
-struct MarkeredImage{ViewType}
+ """
+    Special type to work with segmentated image 
+ """
+struct MarkeredImage
     markers::Matrix{Int} # this stores the matrix of markers
-    flag::Matrix{Bool}
-    ViewsVect::Vector{ViewType} # this type of image view for various flags 
+    ViewsVect::Vector{Vector{CartesianIndex{2}}} # stores a vector of indices per each pattern
     MarkeredImage(markers::Matrix{Int}) = begin
-        #inds = Vector{Int}(undef,max_label)
         flag = similar(markers,Bool)
         max_label = maximum(markers)
         map!(i->i==1 ,flag, markers)
-        v = @view markers[flag]
-        ViewsVect = Vector{typeof(v)}(undef,max_label)
-        ViewsVect[1] = v
+        ViewsVect = Vector{Vector{CartesianIndex{2}}}(undef,max_label)
+        ViewsVect[1] = findall(flag)
         for i in 2:max_label
             map!(m->m==i ,flag, markers)
-            ViewsVect[i] = @view markers[flag] 
+            ViewsVect[i] = findall(flag)
         end
-        return new{typeof(v)}(markers,flag,ViewsVect)    
+        return new(markers,ViewsVect)    
     end
  end
- function Base.length(m::MarkeredImage)
+ """
+    Base.length(m::MarkeredImage)
+
+Return the total number of patterns in the markerred image [`MarkeredImage`](@ref)
+"""
+function Base.length(m::MarkeredImage)
     return length(m.ViewsVect)
  end
- function Base.size(m::MarkeredImage)
+ """
+    Base.size(m::MarkeredImage)
+
+The image size in pixels
+"""
+function Base.size(m::MarkeredImage)
     return size(m.markers)
  end
 function areas(m::MarkeredImage)
     areas = Vector{Float64}(undef,length(m))
-    map!(sum,areas,m.ViewsVect)
+    for i in 1:length(m)
+        areas[i] = sum(view(m,i))
+    end
     return areas
+end
+function Base.getindex(m::MarkeredImage,i)
+    return m.markers[m.ViewsVect[i]]
+end
+function Base.setindex!(m::MarkeredImage,val::Int,i::Int)
+    fill!(view(m,i),val)
+end
+function Base.view(m::MarkeredImage,i::Int)
+    return @view m.markers[m.ViewsVect[i]]
+end
+function flag(m::MarkeredImage,i::Int)
+    fl = similar(m.markers,Bool)
+    return flag!(fl,m,i)
+end
+function external_flag(m::MarkeredImage,i::Int)
+    fl = similar(m.markers,Bool)
+    return flag!(fl,m,i,negate=true)
+end
+function flag!(fl::FlagMatrix,m::MarkeredImage,i::Int;negate::Bool=false)
+    fill!(fl,negate)
+    f = @view fl[m.ViewsVect[i]]
+    fill!(f,!negate)
+    return fl
 end
  """
     sort_reduce!(m::MarkeredImage;total_number::Int = -1,descending::Bool=true)
 
-Sorts and reduces the total number of patterns
+Sorts markers by total area and reduces the total number of patterns if the maximum label
+is less then `total_number` value and 
 """
 function sort_reduce!(m::MarkeredImage;total_number::Int = -1,descending::Bool=true)
     max_label = length(m)
@@ -185,6 +222,8 @@ function sort_reduce!(m::MarkeredImage;total_number::Int = -1,descending::Bool=t
         fill!(m.ViewsVect[inds[i]],i)
     end
  end
+sort_markers!(m::MarkeredImage,descending::Bool=true) = sort_reduce!(m,total_number=-1,descending=descending)
+
     """
     full_image_flag(filtered_im::FilteredImage)
 
@@ -275,6 +314,10 @@ Total number of values needed to create [`CentredObj`](@ref) of specified type
 function Base.length(::T) where T<:CentredObj
         return parnumber(T)
     end 
+
+    function Base.show(io::IO, c::CentredObj) 
+        print(io, "$(name(c)) with center at ($(c.center[1]) , $(c.center[1])) and size  ($(join(string.(dimensions(c)),",")))")
+    end
     """
     is_within(c::CentredObj,_)
 
@@ -499,7 +542,7 @@ not within the CentreObj set to true.  See also `is_within`
                                 optimizer::Optim.ZerothOrderOptimizer = Optim.NelderMead(), 
                                 options::Optim.Options=Optim.Options())
 
-Fits [`CentredObj`](@ref) to binary image pattern (region of units) by adjusting centre coordinates and dimentions
+Fits [`CentredObj`](@ref) to binary image pattern (region of units) by adjusting centre coordinates and dimensions
 using zeroth-order optimizers from `Optim.jl` package.
 
 Input variables:
@@ -562,14 +605,17 @@ img - input image of [`RescaledImage`](@ref) type
 For other input arguments see [`marker_image`](@ref) and [`fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix)`](@ref)
 """
 function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
-                                            level_threshold::Float64=0.8,
-                                            distance_threshold::Float64=1e-3,
+                                            level_threshold::Float64=-1.0,
+                                            distance_threshold::Float64=-15.0,
                                             max_centred_objs::Int=200,
                                             optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
                                             options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
                                             
-            markers = marker_image(img,level_threshold=level_threshold,distance_threshold=distance_threshold)     
-            markers_number = count_separate_patterns(markers)       
+            markers = marker_image(img,level_threshold=level_threshold,
+                                    distance_threshold=distance_threshold)     
+
+           # markers_number = count_separate_patterns(markers)       
+            markers_number = length(markers) 
             markers_number=minimum((markers_number,max_centred_objs))    
             if markers_number<=0 
                  return Vector{T}([])  
@@ -577,7 +623,7 @@ function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
                 centered_objs_to_fit = [T() for _ in 1:markers_number]
             end
             Threads.@sync for (i,c) in enumerate(centered_objs_to_fit)
-                Threads.@spawn ThermovisorData.fit_centred_obj!(c,markers.==i,optimizer = optimizer,options = options)
+                Threads.@spawn ThermovisorData.fit_centred_obj!(c,flag(markers,i),optimizer = optimizer,options = options)
             end
             return centered_objs_to_fit
     end  
@@ -608,9 +654,10 @@ function center(c::CentredObj)  c.center.data end
     """
     dimensions(c::CentredObj)
 
-Return dimentional parameters (vector)
+Return dimensional parameters (vector)
 """
-function dimensions(c::CentredObj)  c.dimentions.data end
+function dimensions(c::CentredObj)  c.dimensions.data end
+name(c::CentredObj) = "CentredObj"
 
 Base.:*(c::CentredObj,a::Number) = begin 
     c_copy = copyobj(c)
@@ -627,7 +674,7 @@ end
     obj_from_vect(::Type{CentredObj},v::AbstractVector)
 
 Creates object from parameters vector, first two arguments are center
-point other are dimentions [center[1],center[2],dimentions[1],...]
+point other are dimensions [center[1],center[2],dimensions[1],...]
 """
     function obj_from_vect(::Type{T},v::AbstractVector) where T<:CentredObj
             c = T() # empty constructor calling
@@ -638,7 +685,7 @@ point other are dimentions [center[1],center[2],dimentions[1],...]
     """
     fill_from_vect!(c::CentredObj, v::AbstractVector)
 
-Fills CentreObj parameters from the vector [center_index_1,center_index_2,dimention_1,dimention_2,...]
+Fills CentreObj parameters from the vector [center_index_1,center_index_2,dimension_1,dimension_2,...]
 """
     function fill_from_vect!(c::CentredObj, v::AbstractVector)
         @assert length(c)==Base.length(v)
@@ -659,6 +706,7 @@ Circle object with defined diemeter
         end
         CircleObj() = new(MVector{2}(1,1),MVector{1}(1))
     end
+    name(::CircleObj) = "Circle"
     parnumber(::Type{CircleObj}) = 3
     diameter(c::CircleObj) = c.dimensions[]
     radius(c::CircleObj) = c.dimensions[]/2
@@ -716,6 +764,7 @@ Square with defined center and side
         end
         SquareObj() = new(MVector{2}(1,1),MVector{1}(1))
     end
+    name(::SquareObj) = "Square"
     parnumber(::Type{SquareObj}) = 3
     area(c::SquareObj)=^(c.dimensions[],2)
     side(c::SquareObj) = c.dimensions[]
@@ -799,6 +848,7 @@ rearranged_diagonal(c::Union{SquareObj,CircleObj}) = begin
         end
         RectangleObj() = new(MVector{2}(1,1),MVector{2}(1,1))
     end
+    name(::RectangleObj) = "Rectangle"
     parnumber(::Type{RectangleObj}) = 4
     area(c::RectangleObj)=*(side(c)...)
     side(c::RectangleObj) = (c.dimensions[1],c.dimensions[2])
@@ -878,7 +928,7 @@ Funtion zeroes all pixels of the image, except those belonging to the specified 
 
 Function returns [`FilteredImage`](@ref) object
 """
-    function filter_image(imag::RescaledImage,markers::Matrix{Int};label=0)
+    function filter_image(imag::RescaledImage,markers::MarkeredImage;label::Int=1)
         # function extracts from markerd image
         # markers - the matrix with all labeled elements
         # imag - initial rescaled image 
@@ -1000,10 +1050,20 @@ returns `markers`  - matrix of Int's with the same size as the input matrix, eac
 of `markers` is the label index of individual patterns of the initial image
 """
     function marker_image(rescaled::RescaledImage;
-                    level_threshold::Float64=0.8,distance_threshold::Float64=1e-3)
-        dist =  distance_transform(feature_transform(rescaled.im .> level_threshold))
-        markers = label_components(dist .< distance_threshold)
-        return markers
+                    level_threshold::Float64=-1.0,
+                    distance_threshold::Float64=-15.0)
+        if level_threshold>1 || level_threshold <=0 # if threshold is not settled explicitly the otsu thresholding algorithm is used
+            level_threshold = otsu_threshold(rescaled.im)
+        end
+        # thermal image is an image with several region of higher temperature
+        # we want to implement the watershed algorithm to separate patterns from each other
+        # first we need to negate image 
+        binarized = rescaled.im .< level_threshold
+        dist = distance_transform(feature_transform(binarized))
+        @. dist = 1 - dist
+        segments = watershed(dist, label_components(dist .< distance_threshold))
+
+        return MarkeredImage(labels_map(segments) .* (1 .-binarized))
     end
 
 
