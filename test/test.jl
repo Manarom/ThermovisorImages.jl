@@ -18,14 +18,20 @@ simshow(markers2 )
 
 im_rescaled = ThermovisorData.RescaledImage(1 .-im_float)
 markers = ThermovisorData.marker_image(im_rescaled)
-simshow(markers)
+simshow(markers.markers)
 end
 begin 
-    im_rescaled2 = ThermovisorData.read_temperature_file(raw"E:\JULIA\JULIA_DEPOT\dev\ThermovisorData\thermal images\2025-03-17 18-15-23_S_T500.csv")
+    (im_rescaled2,) = ThermovisorData.read_temperature_file(raw".\thermal images\T600.csv")
 
-    markers2 = ThermovisorData.marker_image(im_rescaled2[1])
-    simshow(markers2)
+    markers2 = ThermovisorData.marker_image(im_rescaled2)
+    simshow(markers2.markers)
 
     #maximum(markers2)
 end
 typeof(markers2)
+extflag = ThermovisorData.external_flag(markers2,1)
+simshow(extflag)
+im_copy = copy(im_rescaled2.im)
+v=  @view im_copy[extflag]
+typeof(v)
+ThermovisorData.filter_image!( im_copy,extflag)

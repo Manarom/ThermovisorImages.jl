@@ -198,9 +198,9 @@ fill_vect!(x::AbstractVector, c::CentredObj)
 Converts `CentredObj` to vector
 """
 function fill_vect!(x::AbstractVector, c::CentredObj)
-x[1] = c.center[1];x[2]=c.center[2];
-x[3:end] .= c.dimensions
-return x
+    x[1] = c.center[1];x[2]=c.center[2];
+    x[3:end] .= c.dimensions
+    return x
 end
 
 """
@@ -225,18 +225,25 @@ dimensions(c::CentredObj)
 Return dimensional parameters (vector)
 """
 function dimensions(c::CentredObj)  c.dimensions.data end
+
 name(c::CentredObj) = "CentredObj"
 
+"""
+    Base.isless(c1::CentredObj,c2::CentredObj)
+
+By default centred objects are compared by their areas, thus the vector of centred objects can be sorted
+"""
+Base.isless(c1::CentredObj,c2::CentredObj) = Base.isless(area(c1),area(c2))
 Base.:*(c::CentredObj,a::Number) = begin 
-c_copy = copyobj(c)
-@. c_copy.dimensions = int_floor_abs(a*c_copy.dimensions)
-return c_copy
+        c_copy = copyobj(c)
+        @. c_copy.dimensions = int_floor_abs(a*c_copy.dimensions)
+    return c_copy
 end
 Base.:*(a::Number,c::CentredObj) = c*a
 Base.:/(c::CentredObj,a::Number) = begin 
-c_copy = copyobj(c)
-@. c_copy.dimensions = int_floor_abs(c_copy.dimensions/a)
-return c_copy
+            c_copy = copyobj(c)
+            @. c_copy.dimensions = int_floor_abs(c_copy.dimensions/a)
+    return c_copy
 end
 """
 obj_from_vect(::Type{CentredObj},v::AbstractVector)
@@ -256,7 +263,7 @@ fill_from_vect!(c::CentredObj, v::AbstractVector)
 Fills CentreObj parameters from the vector [center_index_1,center_index_2,dimension_1,dimension_2,...]
 """
 function fill_from_vect!(c::CentredObj, v::AbstractVector)
-    @assert length(c)==Base.length(v)
+    @assert length(c) == Base.length(v)
     l_d = Base.length(c.dimensions)
     map!(int_floor,c.center,v[1:2])
     map!(int_floor_abs,c.dimensions,v[3:2+l_d])

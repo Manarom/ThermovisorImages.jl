@@ -374,8 +374,8 @@ begin # generating pattern
 	end
 	rs = RescaledImage(img)
 	markers = ThermovisorData.marker_image(rs,distance_threshold = 0.0)
-	separate_patterns_number = maximum(markers) # now we need to check for the separate patterns number 
-	rgb_markers = ThermovisorData.draw(Float64.(markers))	# converting to rgb image
+	separate_patterns_number = length(markers) # now we need to check for the separate patterns number 
+	rgb_markers = ThermovisorData.draw(Float64.(markers.markers))	# converting to rgb image
 end
 
 # ╔═╡ 96ad6e27-52dd-41aa-b115-f852049a485a
@@ -391,7 +391,7 @@ begin # fitting ROI's to image with several
 	fit_multiple
 	if is_fit_multiple
 
-		fitted_rois = ThermovisorData.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0)
+		fitted_rois = ThermovisorData.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0,sort_by_area=true)
 		rgb_image_multi_roi = draw!(img,fitted_rois[1],show_cross = true,fill=true)
 		for i in 2:length(fitted_rois)
 			 ThermovisorData.draw!(rgb_image_multi_roi,fitted_rois[i],thickness = 1,fill=true,show_cross = true)
@@ -402,6 +402,15 @@ begin # fitting ROI's to image with several
 		nothing
 	end
 end
+
+# ╔═╡ 63926917-87b5-494e-8b00-d44f3f90e0a2
+areas_init = [ThermovisorData.area(c) for c in centered_objs]
+
+# ╔═╡ 304eabd8-1bae-458c-93bf-542d24beece5
+areas_fitted =[ThermovisorData.area(c) for c in fitted_rois]
+
+# ╔═╡ cc06c4ab-06aa-49c2-b423-38340643184e
+sort!(areas_init,rev=true)
 
 # ╔═╡ 68b33b39-5ef5-4560-b4b2-1fe2f43a3628
 md" Save multiple patterns fit ? $(@bind is_save_multipattern_fit CheckBox(default=false))"
@@ -415,6 +424,11 @@ begin
 		end
 	end
 end
+
+# ╔═╡ 821a7c95-f4da-410d-b780-111abb6d0db5
+md"""
+	Show/hide rois $(@bind is_draw_rois Select( ["show" ;"hide" ]))
+	"""
 
 # ╔═╡ 2af862c2-c026-43a8-82e3-77ff8cb2095c
 begin
@@ -433,14 +447,63 @@ begin
 	rgb_image_coins
 end
 
-# ╔═╡ af244995-703d-4199-8c07-a9b8fab9ade4
-simshow(markers_coins.markers)
+# ╔═╡ b640fcd0-3e49-471d-b281-87137a781eba
+begin 
+	test_markers = ThermovisorData.marker_image(rescaled_coin)
+	before_sorting = simshow(test_markers.markers)
+	inds = Vector{Int}(undef,length(test_markers))
+	@show areas_vals = ThermovisorData.areas(test_markers)
+	sortperm!(inds,areas_vals,rev=true)
+	permute!(test_markers.ViewsVect,inds)
+	@show ThermovisorData.areas(test_markers)
+	for i = 1:length(test_markers)
+        #v = view(test_markers.markers,test_markers.ViewsVect[i])
+		#fill!(v,i)
+		test_markers[i] = i
+    end
+	@show ThermovisorData.areas(test_markers)
+	after_sorting = simshow(test_markers.markers)
+end;
 
-# ╔═╡ 7d8f4848-8a73-4c50-bd05-fe564da2aa89
-fitted_rois_coins
+# ╔═╡ 7a00ce43-94e2-4f68-b651-b57bf7d6ab05
+[before_sorting;after_sorting]
 
-# ╔═╡ a0169426-f11b-4fff-860b-d393be15527a
-markers_number=minimum((length(markers_coins),200)) 
+# ╔═╡ ecfd5449-29f6-452b-ae3d-d8e40932c8a0
+simshow(ThermovisorData.shrinked_flag(test_markers,1))
+
+# ╔═╡ 96bac7d3-780a-4e36-9135-0074a776dc75
+sum(ThermovisorData.shrinked_flag(test_markers,1))
+
+# ╔═╡ c684ba14-e26d-4fc3-9967-801ecea1d343
+
+
+# ╔═╡ 0903ce52-3fe8-41fa-a0d8-bc65fa589d10
+begin 
+	#cent23 = RectangleObj([48,50],[35,25])
+	#im23= ThermovisorData.cent_to_flag(cent23,(100,100))
+	im23 = image_to_show .>30
+	fff = findall(im23)
+	 (min_i,max_i) = extrema(fff)
+	dinds = max_i - min_i + CartesianIndex(1,1)#indices difference
+	
+	fff_reduced = fill(false,Tuple.(dinds))
+	for inds in fff
+		#@show inds
+		inds_in = inds - min_i + CartesianIndex(1,1)
+		#@show inds_in
+		fff_reduced[inds_in] = im23[inds]
+	end
+	
+end
+
+# ╔═╡ 259c49e5-0f0e-4e30-875b-b175f170b0c5
+simshow(im23)
+
+# ╔═╡ 3815ec4d-5248-4ce4-a960-856be32faf0c
+sum(im23)
+
+# ╔═╡ 32dbf995-d572-4300-a308-2a6d37cd1642
+sum(fff_reduced)
 
 # ╔═╡ Cell order:
 # ╟─4460f260-f65f-446d-802c-f2197f4d6b27
@@ -451,7 +514,7 @@ markers_number=minimum((length(markers_coins),200))
 # ╠═f6c1be87-94d2-4b08-a52d-6eb637192ee8
 # ╠═e71f123c-284e-4107-8231-4031873f122c
 # ╟─870113c3-b439-4d34-90d8-fdd8a158f9dd
-# ╟─c241bae6-1925-4be1-af41-44673f02617a
+# ╠═c241bae6-1925-4be1-af41-44673f02617a
 # ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
 # ╟─794ebd5e-e9e0-4772-98a9-43e20c7ef4da
 # ╟─429cf33f-4422-44f0-beb8-5a1908a72273
@@ -473,7 +536,7 @@ markers_number=minimum((length(markers_coins),200))
 # ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
 # ╟─c67290fc-6291-4f3e-a660-a3c4afa3a5e3
 # ╟─4e1a5050-59b0-4d24-98bb-1520c06b28c5
-# ╟─42a7b186-aa04-4249-a129-bf925f181008
+# ╠═42a7b186-aa04-4249-a129-bf925f181008
 # ╟─e1ccfd33-3d54-4249-86f1-381a1ef90615
 # ╟─b096c4f2-9dce-409d-874a-a851f577bf92
 # ╟─59f9a7f2-9601-431c-a897-543fa25c64c4
@@ -491,9 +554,19 @@ markers_number=minimum((length(markers_coins),200))
 # ╟─96ad6e27-52dd-41aa-b115-f852049a485a
 # ╟─0badf26a-38fa-45be-9704-d4e80b12a9cb
 # ╠═6adfae4d-5137-4692-b9f3-3793c4c76202
+# ╠═63926917-87b5-494e-8b00-d44f3f90e0a2
+# ╠═304eabd8-1bae-458c-93bf-542d24beece5
+# ╠═cc06c4ab-06aa-49c2-b423-38340643184e
 # ╟─68b33b39-5ef5-4560-b4b2-1fe2f43a3628
 # ╟─8a132aba-aa8a-428a-84a2-0ab6e5e2b891
+# ╠═821a7c95-f4da-410d-b780-111abb6d0db5
 # ╠═2af862c2-c026-43a8-82e3-77ff8cb2095c
-# ╠═af244995-703d-4199-8c07-a9b8fab9ade4
-# ╠═7d8f4848-8a73-4c50-bd05-fe564da2aa89
-# ╠═a0169426-f11b-4fff-860b-d393be15527a
+# ╠═b640fcd0-3e49-471d-b281-87137a781eba
+# ╠═7a00ce43-94e2-4f68-b651-b57bf7d6ab05
+# ╠═ecfd5449-29f6-452b-ae3d-d8e40932c8a0
+# ╠═96bac7d3-780a-4e36-9135-0074a776dc75
+# ╠═c684ba14-e26d-4fc3-9967-801ecea1d343
+# ╠═0903ce52-3fe8-41fa-a0d8-bc65fa589d10
+# ╠═259c49e5-0f0e-4e30-875b-b175f170b0c5
+# ╠═3815ec4d-5248-4ce4-a960-856be32faf0c
+# ╠═32dbf995-d572-4300-a308-2a6d37cd1642
