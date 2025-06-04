@@ -52,7 +52,7 @@ the scene.
     const DefColorScheme = Ref("HEAT")
     const DEFAULT_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1,iterations=30))
     include("CentredObj.jl")
-    include("MarkeredImages.jl")
+    include("MarkeredImage.jl")
     """
 	    RescaledImage - structure stores the image data mapped to region  [0,1]
 Fields:
@@ -73,16 +73,20 @@ im - image with all values from 0 to 1
         min::T
         max::T
         im::Matrix{T}
-        RescaledImage(image::Matrix{T}) where T<:Number =begin
+        RescaledImage(image::Matrix{T};negate::Bool=false) where T<:Number =begin
             sz = size(image)
             new{T}(image,sz,rescale!(copy(image))...)
         end
     end
     Base.size(image::RescaledImage) = image.sz
     Base.copy(image::RescaledImage) = RescaledImage(copy(image.initial))
-    function rescale!(image::AbstractMatrix)
+    function rescale!(image::AbstractMatrix;negate::Bool=false)
         min,max = extrema(image)
-        @. image = (image - min)/(max-min)
+        if negate 
+            @. image = (image - min)/(max-min) 
+        else 
+            @. image = (image - min)/(max-min)
+        end
         return (min,max,image)
     end
     """
@@ -333,8 +337,9 @@ function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
             end
             Threads.@sync for (i,c) in enumerate(centered_objs_to_fit)
                 Threads.@spawn begin 
-                    fl  = shrinked_flag(markers,i)
-                    ThermovisorData.fit_centred_obj!(c,flag(markers,i),optimizer = optimizer,options = options)
+                    (fl,i_min,i_max)  = shrinked_flag(markers,i) # returns flag and minimu and maximal indices in the initial array
+                    ThermovisorData.fit_centred_obj!(c,fl,optimizer = optimizer,options = options)
+                    shift!(c,i_min)
                 end
             end
             return centered_objs_to_fit
@@ -365,7 +370,7 @@ if external  is true than as a filtering flag the inverse of centered object ima
 """
    filter_image(imag::AbstractMatrix,c::CentredObj;external=false) = filter_image!(copy(imag),cent_to_flag(c,size(imag),external= !external))
    filter_image(imag,flag::FlagMatrix) =  filter_image!(copy(imag),flag)
-   filter_image(imag::RescaledImage;label = 0) = filter_image(imag,marker_image(imag),label=label)
+   filter_image(imag::RescaledImage;label = 1) = filter_image(imag,marker_image(imag),label=label)
    """
     filter_image(imag::RescaledImage,c::CentredObj;external=false)
 
@@ -429,6 +434,7 @@ of `markers` is the label index of individual patterns of the initial image
 function marker_image(rescaled::RescaledImage;
                 level_threshold::Float64=-1.0,
                 distance_threshold::Float64=-15.0)
+
     if level_threshold>1 || level_threshold <=0 # if threshold is not settled explicitly the otsu thresholding algorithm is used
         level_threshold = otsu_threshold(rescaled.im)
     end
@@ -456,8 +462,13 @@ function read_temperature_file(f_name::AbstractString)
 			file_full_path = joinpath(default_images_folder[],f_name)
             isfile(file_full_path) ? nothing : return nothing
 		end
-		m_file = CSV.File(file_full_path,header=false,types=Float64)
-		pic = RescaledImage(CSV.Tables.matrix(m_file));
+        if Is(FileType.Image, file_full_path)
+            
+            im_float = Float64.(Gray.(FileIO.load(file_full_path)))
+        else
+            im_float = CSV.Tables.matrix(CSV.File(file_full_path,header=false,types=Float64))
+        end
+		pic = RescaledImage(im_float);
 		creation_time = mtime(file_full_path)
 		return (pic,creation_time)
     end

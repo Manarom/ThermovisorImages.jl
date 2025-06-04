@@ -121,15 +121,15 @@ function Base.setindex!(img::Matrix{T},x::Number,c::CentredObj) where T
 end
 
 """
-shift!(c::CentredObj,x::AbstractVector)
+    shift!(c::CentredObj,ind::CartesianIndex{2})
 
 Relative shift of centred object center
 """
-function shift!(c::CentredObj,x::AbstractVector)
-    @. c.center +=x 
+function shift!(c::CentredObj,ind::CartesianIndex{2})
+    c.center[1] += ind[1]
+    c.center[2] += ind[2]
     return nothing
 end
-
 """
 cent_to_flag(c::CentredObj,sz::Tuple{Int,Int};external=false)
 
@@ -244,15 +244,6 @@ Base.:/(c::CentredObj,a::Number) = begin
             c_copy = copyobj(c)
             @. c_copy.dimensions = int_floor_abs(c_copy.dimensions/a)
     return c_copy
-end
-function Base.:+(c::CentredObj,ind::CartesianIndex)  
-    c.center[1] += ind[1]
-    c.center[2] += ind[2]
-end
-Base.:+(ind::CartesianIndex,c::CentredObj) = c+ind
-function Base.:-(c::CentredObj,ind::CartesianIndex)  
-    c.center[1] -= ind[1]
-    c.center[2] -= ind[2]
 end
 """
 obj_from_vect(::Type{CentredObj},v::AbstractVector)

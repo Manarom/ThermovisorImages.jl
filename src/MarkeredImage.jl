@@ -1,37 +1,4 @@
-"""
-sort_markers_by_area!(markers::Matrix{Int};total_number::Int = -1,rev::Bool=true)
 
-Function sorts in-place the matrix of markers by the value of pattern areas
-"""
-function sort_markers_by_area!(markers::Matrix{Int};total_number::Int = -1,rev::Bool=true)
-    max_label = maximum(markers)
-
-    if total_number <=0 || total_number >max_label 
-        total_number = max_label
-    end
-    sums = Vector{Float64}(undef,max_label)
-    inds = Vector{Int}(undef,max_label)
-    flag = similar(markers,Bool)
-    map!(i->i==1 ,flag, markers)
-    v = @view markers[flag]
-    ViewsVect = Vector{typeof(v)}(undef,total_number)
-    ViewsVect[1] = v
-    for i in 2:max_label
-        map!(m->m==i ,flag, markers)
-        ViewsVect[i] = @view markers[flag] 
-    end
-    map!(sum,sums,ViewsVect)
-    sortperm!(inds,sums,rev=rev)
-    for i = 1:total_number
-        fill!(ViewsVect[inds[i]],i)
-    end
-    if total_number<max_label
-        for i in total_number+1:max_label
-            fill!(ViewsVect[inds[i]],0)
-        end
-    end
-    return markers
-end
 """
 Special type to work with segmentated image 
 """
@@ -124,7 +91,7 @@ function shrinked_flag(m::MarkeredImage,i::Int)
             i_in = c - min_i + CartesianIndex(1,1)
             fl[i_in] = true#m.markers[c]
         end
-        return fl
+        return (fl,min_i,max_i)
 end
 
 """
