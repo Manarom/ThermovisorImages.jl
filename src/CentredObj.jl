@@ -227,7 +227,7 @@ Return dimensional parameters (vector)
 function dimensions(c::CentredObj)  c.dimensions.data end
 
 name(c::CentredObj) = "CentredObj"
-
+# arithmetic operations on CentredObj
 """
     Base.isless(c1::CentredObj,c2::CentredObj)
 
@@ -244,6 +244,15 @@ Base.:/(c::CentredObj,a::Number) = begin
             c_copy = copyobj(c)
             @. c_copy.dimensions = int_floor_abs(c_copy.dimensions/a)
     return c_copy
+end
+function Base.:+(c::CentredObj,ind::CartesianIndex)  
+    c.center[1] += ind[1]
+    c.center[2] += ind[2]
+end
+Base.:+(ind::CartesianIndex,c::CentredObj) = c+ind
+function Base.:-(c::CentredObj,ind::CartesianIndex)  
+    c.center[1] -= ind[1]
+    c.center[2] -= ind[2]
 end
 """
 obj_from_vect(::Type{CentredObj},v::AbstractVector)
@@ -263,8 +272,8 @@ fill_from_vect!(c::CentredObj, v::AbstractVector)
 Fills CentreObj parameters from the vector [center_index_1,center_index_2,dimension_1,dimension_2,...]
 """
 function fill_from_vect!(c::CentredObj, v::AbstractVector)
-    @assert length(c) == Base.length(v)
-    l_d = Base.length(c.dimensions)
+    @assert length(c) == length(v)
+    l_d = length(c.dimensions)
     map!(int_floor,c.center,v[1:2])
     map!(int_floor_abs,c.dimensions,v[3:2+l_d])
     return c
@@ -281,6 +290,7 @@ mutable struct CircleObj <:CentredObj
     end
     CircleObj() = new(MVector{2}(1,1),MVector{1}(1))
 end
+
 name(::CircleObj) = "Circle"
 parnumber(::Type{CircleObj}) = 3
 diameter(c::CircleObj) = c.dimensions[]
@@ -296,12 +306,14 @@ Fills starting vector for the optimization of `CentredObj`
 """
 function fill_x0!(x0,im_bin::FlagMatrix,::CircleObj)
 
-        min_ind = findfirst(im_bin)
+        min_ind = findfirst(im_bin)#cartesian indices
         max_ind = findlast(im_bin)
 
         starting_diameter= sqrt(sum(abs2, Tuple.(max_ind - min_ind)))
-
-        x0 .= [collect(x/2 for x in Tuple.(max_ind + min_ind))..., starting_diameter]
+        x0[end] = starting_diameter
+        x0[1] =0.5*(min_ind[1] + max_ind[1])
+        x0[2] = 0.5*(min_ind[2] + max_ind[2])
+        #x0 .= [collect(x/2 for x in Tuple.(max_ind + min_ind))..., starting_diameter]
 end    
 """
 line_within_mask(c::CircleObj,ang,line_length)

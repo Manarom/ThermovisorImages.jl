@@ -403,15 +403,6 @@ begin # fitting ROI's to image with several
 	end
 end
 
-# ╔═╡ 63926917-87b5-494e-8b00-d44f3f90e0a2
-areas_init = [ThermovisorData.area(c) for c in centered_objs]
-
-# ╔═╡ 304eabd8-1bae-458c-93bf-542d24beece5
-areas_fitted =[ThermovisorData.area(c) for c in fitted_rois]
-
-# ╔═╡ cc06c4ab-06aa-49c2-b423-38340643184e
-sort!(areas_init,rev=true)
-
 # ╔═╡ 68b33b39-5ef5-4560-b4b2-1fe2f43a3628
 md" Save multiple patterns fit ? $(@bind is_save_multipattern_fit CheckBox(default=false))"
 
@@ -466,16 +457,31 @@ begin
 end;
 
 # ╔═╡ 7a00ce43-94e2-4f68-b651-b57bf7d6ab05
-[before_sorting;after_sorting]
+hcat(before_sorting,after_sorting)
 
 # ╔═╡ ecfd5449-29f6-452b-ae3d-d8e40932c8a0
 simshow(ThermovisorData.shrinked_flag(test_markers,1))
 
-# ╔═╡ 96bac7d3-780a-4e36-9135-0074a776dc75
-sum(ThermovisorData.shrinked_flag(test_markers,1))
+# ╔═╡ 1fb56e7a-6bc5-4c9d-9de1-22a62e39bb66
+c1 = ThermovisorData.CircleObj()
 
-# ╔═╡ c684ba14-e26d-4fc3-9967-801ecea1d343
+# ╔═╡ a7d6f66c-0774-419b-85ee-b8da74498227
+fl1 = ThermovisorData.shrinked_flag(test_markers,1);
 
+# ╔═╡ 3e408b86-bb21-4d48-8842-a21b054726be
+x0 = [1.0; 2.0; 3.0]
+
+# ╔═╡ 9d4a3283-26f4-45fb-ab26-7f55d9f01a4e
+ThermovisorData.fill_x0!(x0,fl1,c1)
+
+# ╔═╡ 4adf3ee6-742d-421d-bb54-dca02aebd833
+ThermovisorData.fit_centred_obj!(c1,fl1)
+
+# ╔═╡ 81b1776f-c527-4235-b84e-c9c912098220
+
+
+# ╔═╡ 3ab979f6-3a5f-4739-9c49-ff1e75a94a62
+ThermovisorData.area(c1)
 
 # ╔═╡ 0903ce52-3fe8-41fa-a0d8-bc65fa589d10
 begin 
@@ -495,15 +501,6 @@ begin
 	end
 	
 end
-
-# ╔═╡ 259c49e5-0f0e-4e30-875b-b175f170b0c5
-simshow(im23)
-
-# ╔═╡ 3815ec4d-5248-4ce4-a960-856be32faf0c
-sum(im23)
-
-# ╔═╡ 32dbf995-d572-4300-a308-2a6d37cd1642
-sum(fff_reduced)
 
 # ╔═╡ Cell order:
 # ╟─4460f260-f65f-446d-802c-f2197f4d6b27
@@ -550,13 +547,10 @@ sum(fff_reduced)
 # ╠═10954f10-9414-4839-872f-c2516d5d8e4e
 # ╟─6e728ea6-38be-437a-96b4-9fa084f8fec5
 # ╠═cc909b53-ed4d-44a1-a410-ff25533afc2d
-# ╠═d5b6f453-5e92-41e6-a45f-cb75660bc198
+# ╟─d5b6f453-5e92-41e6-a45f-cb75660bc198
 # ╟─96ad6e27-52dd-41aa-b115-f852049a485a
 # ╟─0badf26a-38fa-45be-9704-d4e80b12a9cb
 # ╠═6adfae4d-5137-4692-b9f3-3793c4c76202
-# ╠═63926917-87b5-494e-8b00-d44f3f90e0a2
-# ╠═304eabd8-1bae-458c-93bf-542d24beece5
-# ╠═cc06c4ab-06aa-49c2-b423-38340643184e
 # ╟─68b33b39-5ef5-4560-b4b2-1fe2f43a3628
 # ╟─8a132aba-aa8a-428a-84a2-0ab6e5e2b891
 # ╠═821a7c95-f4da-410d-b780-111abb6d0db5
@@ -564,9 +558,11 @@ sum(fff_reduced)
 # ╠═b640fcd0-3e49-471d-b281-87137a781eba
 # ╠═7a00ce43-94e2-4f68-b651-b57bf7d6ab05
 # ╠═ecfd5449-29f6-452b-ae3d-d8e40932c8a0
-# ╠═96bac7d3-780a-4e36-9135-0074a776dc75
-# ╠═c684ba14-e26d-4fc3-9967-801ecea1d343
+# ╠═1fb56e7a-6bc5-4c9d-9de1-22a62e39bb66
+# ╠═a7d6f66c-0774-419b-85ee-b8da74498227
+# ╠═3e408b86-bb21-4d48-8842-a21b054726be
+# ╠═9d4a3283-26f4-45fb-ab26-7f55d9f01a4e
+# ╠═4adf3ee6-742d-421d-bb54-dca02aebd833
+# ╠═81b1776f-c527-4235-b84e-c9c912098220
+# ╠═3ab979f6-3a5f-4739-9c49-ff1e75a94a62
 # ╠═0903ce52-3fe8-41fa-a0d8-bc65fa589d10
-# ╠═259c49e5-0f0e-4e30-875b-b175f170b0c5
-# ╠═3815ec4d-5248-4ce4-a960-856be32faf0c
-# ╠═32dbf995-d572-4300-a308-2a6d37cd1642
