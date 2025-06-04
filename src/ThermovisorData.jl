@@ -11,6 +11,7 @@ module ThermovisorData
     using StaticArrays
     using Interpolations
     using  FileTypes
+    using FileIO
     import ImageDraw
 
     export RescaledImage,FilteredImage, MarkeredImage,
@@ -50,7 +51,7 @@ the scene.
     const int_floor = Int ∘ floor
     const int_floor_fld = Int ∘ floor ∘ fld
     const DefColorScheme = Ref("HEAT")
-    const DEFAULT_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1,iterations=30))
+    const DEFAULT_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1,iterations=50))
     include("CentredObj.jl")
     include("MarkeredImage.jl")
     """
@@ -339,7 +340,7 @@ function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
                 Threads.@spawn begin 
                     (fl,i_min,i_max)  = shrinked_flag(markers,i) # returns flag and minimu and maximal indices in the initial array
                     ThermovisorData.fit_centred_obj!(c,fl,optimizer = optimizer,options = options)
-                    shift!(c,i_min)
+                    shift!(c,i_min - CartesianIndex(1,1))
                 end
             end
             return centered_objs_to_fit
