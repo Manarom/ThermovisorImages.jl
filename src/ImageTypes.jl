@@ -30,7 +30,7 @@ im - image with all values from 0 to 1
     Base.copy(image::RescaledImage) = RescaledImage(copy(image.initial))
     function rescale!(image::AbstractMatrix;negate::Bool=false)
         min,max = extrema(image)
-        if negate 
+        if !negate 
             @. image = (image - min)/(max-min) 
         else 
             @. image =(max - image)/(max-min)
