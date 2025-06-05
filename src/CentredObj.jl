@@ -1,7 +1,8 @@
+# this code should not be dependent on custom image types
 """
 `CentredObj` is a sort of region of interest (ROI) marker object. 
 
-`CentredObj` has centre coordinates, object's center can be 
+`CentredObj` has centre coordinates and dimensions, object's center can be 
 anywhere with respect to the image indices. ROI also has one or more size parameters (in pixels)
 coordinates of centre are equal to CartesianIndices, first element is the row index, 
 the second element is the column index!! (y and x coordinate)
@@ -11,7 +12,17 @@ elements of image within c, `image[c]=x` sets all elements of image to the value
 should be 1. `CentredObj` can also be used to set all image points within the ROI to a single value.
 e.g. `image[c] = 30` 
 
+By default we have three `CentredObj` types in package: 
+
+[`CircleObj`](@ref), [`SquareObj`](@ref) and [`RectangleObj`](@ref)
+
 To impement `CentredObj` abstraction one needs to implement:
+
+[`side`](@ref) - returns what is assumed to be the single number characterisation of the dimentions (by default the maximum value of dimensions(c) is taken)
+
+[`area`](@ref) - returns the CentredObj area, used in statistics calculation and in default two objs compirason see [`isless(c1::CentredObj,c2::CentredObj)`](@ref)
+
+[`perimeter`](@ref) - Object's perimeter
 
 [`is_within`](@ref) - function to check if inds are within the `CentredObj`
 
@@ -60,15 +71,18 @@ function Base.length(::T) where T<:CentredObj
     return parnumber(T)
 end 
 
-function Base.show(io::IO, c::CentredObj) 
-    print(io, "$(name(c)) with center at ($(c.center[1]) , $(c.center[1])) and size  ($(join(string.(dimensions(c)),",")))")
+function Base.show(io::IO, c::C) where C<:CentredObj
+    print(io, "$(name(c)) with center at ($(center(c)[1]) , $(center(c)[2])) and size  ($(join(string.(dimensions(c)),",")))")
 end
 """
 is_within(c::CentredObj,_)
 
 Function to check if indices are within [`CentredObj`](@ref)
 """
-function is_within(c::CentredObj,_)  DomainError(typeof(c),"no implementation") end
+is_within(c::CentredObj,_)=error(DomainError(typeof(c),"no `is_within` implementation"))
+dimenisons(c::CentredObj)=  error(DomainError(typeof(c),"no `dimentions` implementation"))
+side(c::CentredObj) = maximum(dimensions(c))
+name(c::CentredObj) =  "No name"
 """
 is_within(c::CentredObj,i::CartesianIndex)
 
@@ -77,9 +91,21 @@ is_within(c::CentredObj,i::CartesianIndex)
 function is_within(c::CentredObj,i::CartesianIndex) 
     return is_within(c,SVector(Tuple.(i)))
 end 
-revcentre(c::CentredObj) = reverse(c.center)
 """
-is_within_iterator(img::AbstractMatrix,c::CentredObj)
+    center(c::CentredObj)
+
+Vector of object center coordinates (MVector)
+"""
+center(c::CentredObj)=  c.center
+
+"""
+    revcentre(c::CentredObj)
+
+Object coordinates in reverse order
+"""
+revcentre(c::CentredObj) = reverse(center(c))
+"""
+    is_within_iterator(img::AbstractMatrix,c::CentredObj)
 
 Iterator over all `CartesianIndices` within the `img` which are within the CentredObj `c`
 """
@@ -93,7 +119,7 @@ Base.getindex(img::AbstractMatrix,c::CentredObj)
 of temperatures of all points of image lying within the `centred_object` of `CentredObj`
 """
 function Base.getindex(img::AbstractMatrix,c::CentredObj)
-    return map(i->Base.getindex(img,i),is_within_iterator(img,c))
+    return map(i->getindex(img,i),is_within_iterator(img,c))
 end
 """
 Base.setindex!(img::Matrix,x::Array,c::CentredObj)
@@ -125,7 +151,7 @@ end
 
 Relative shift of centred object center
 """
-function shift!(c::CentredObj,ind::CartesianIndex{2})
+function shift!(c::T,ind::CartesianIndex{2}) where T<:CentredObj
     c.center[1] += ind[1]
     c.center[2] += ind[2]
     return nothing
@@ -135,7 +161,7 @@ cent_to_flag(c::CentredObj,sz::Tuple{Int,Int};external=false)
 
 Converts CentredObj to bitmatrix  of size sz
 """
-function cent_to_flag(c::CentredObj,sz::Tuple{Int,Int};external=false)
+function cent_to_flag(c::T,sz::Tuple{Int,Int};external=false) where T<:CentredObj
     external_part_flag = BitMatrix(undef,sz...)
     return external ? fill_im_external!(external_part_flag,c) : fill_im!(external_part_flag,c)
 end
@@ -165,7 +191,13 @@ area(c::CentredObj)
 
 Ealuates the surface area in pixels
 """
-function area(c::CentredObj) DomainError(typeof(c),"no implementation") end
+area(c::CentredObj)= error(DomainError(typeof(c),"no `area` implementation"))
+"""
+    perimeter(c::CentredObj)
+
+Returns perimeter of the object
+"""
+perimeter(c::CentredObj)= error(DomainError(typeof(c),"no `perimeter` implementation"))
 """
     fill_x0!(x0,im_bin::AbstractMatrix,c::CentredObj)
 
@@ -214,17 +246,11 @@ function image_fill_discr(image::AbstractMatrix,c::CentredObj)
      return x-> image_discr(image, fill_im!(im_copy,fill_from_vect!(c,x)))
 end
 """
-center(c::CentredObj)
-
-Returns objects central point 
-"""
-function center(c::CentredObj)  c.center.data end
-"""
 dimensions(c::CentredObj)
 
 Return dimensional parameters (vector)
 """
-function dimensions(c::CentredObj)  c.dimensions.data end
+function dimensions(c::CentredObj)  c.dimensions end
 
 name(c::CentredObj) = "CentredObj"
 # arithmetic operations on CentredObj
@@ -495,26 +521,6 @@ function line_within_mask(c::RectangleObj,ang,line_length)
                    c.center[2]+ lsin ]
 end
 """
-mean_within_mask(img::AbstractMatrix,c::CentredObj)
-
-Evaluates the average temperature of all points within the `CentredObj` marker
-"""
-function mean_within_mask(img::AbstractMatrix,c::CentredObj)
-    flt = Iterators.filter(i->is_within(c,i),keys(img))
-    return Statistics.mean(i->img[i],flt)
-end
-
-"""
-std_within_mask(img::AbstractMatrix, c::CentredObj)
-
-Evaluates standard deviation of temperature for all points within the `CentredObj` marker
-"""
-function std_within_mask(img::AbstractMatrix, c::CentredObj)
-    flt = Iterators.filter(i->is_within(c,i),keys(img))
-    mpper = Iterators.map(i->img[i],flt)
-    return Statistics.std(mpper)
-end
-"""
 along_line_distribution(img::AbstractMatrix{T},x0,y0,x1,y1) where T
 
 Function evaluates matrix values distribution along the line specified by two coordinates, 
@@ -551,6 +557,18 @@ function along_line_distribution(img::AbstractMatrix{T},x0,y0,x1,y1) where T
             end
         end
     return (points,distrib)
+end
+
+
+
+"""
+mean_within_mask(img::AbstractMatrix,c::CentredObj)
+
+Evaluates the average temperature of all points within the `CentredObj` marker
+"""
+function mean_within_mask(img::AbstractMatrix,c::CentredObj)
+    flt = Iterators.filter(i->is_within(c,i),keys(img))
+    return Statistics.mean(i->img[i],flt)
 end
 
 
@@ -628,7 +646,7 @@ function along_line_distribution_xiaolin_wu(img::AbstractMatrix{T}, y0, x0, y1, 
 
             intery += gradient
         end
-        inds = fill(0,Base.length(points))
+        inds = fill(0,length(points))
         sortperm!(inds,points)
         points .=points[inds]
         distrib .=distrib[inds]
@@ -705,8 +723,8 @@ function radial_distribution(imag::AbstractMatrix,c::CentredObj,
     line_length = line_length <=0.0 ? minimum(c.dimensions) : line_length 
     (first_columnn_along_line,_,) = along_mask_line_distribution(imag,c,0.0, line_length;length_per_pixel=length_per_pixel,use_wu=use_wu)
     # 
-    points_number = Base.length(first_columnn_along_line)
-    angles_number = Base.length(angles_range)
+    points_number = length(first_columnn_along_line)
+    angles_number = length(angles_range)
     radial_distrib_matrix = fill(NaN,points_number,angles_number)#Matrix{Float64}(undef,points_number,angles_number)
 
     extrapolation_bc = Interpolations.Line()
@@ -721,107 +739,3 @@ function radial_distribution(imag::AbstractMatrix,c::CentredObj,
     end
     return (first_columnn_along_line,radial_distrib_matrix)
 end
-
-"""
-radial_distribution_statistics(along_length_coordinate,distrib;length_per_pixel=1.0,is_use_student=true)
-
-This function evaluates mean radial diatribution, it's standard deviation and student's coefficient 
-Input arguments `along_length`, `distrib` -  distribution matrix. All rows of distrib which contains NaNs will be 
-droped.
-
-Optional:
-
-max_length - maximal value of along_length_coordinate to be includet in to the statistics evaluation
-
-is_use_student - flag if use students's coefficient
-
-"""
-function radial_distribution_statistics(along_length_coordinate::AbstractVector,distrib::AbstractVecOrMat;
-max_length=-1.0,min_length=-1.0,is_use_student::Bool=true)
-    @assert(length(along_length_coordinate)==size(distrib,1),"Vector of coordinate should have the same length as the number of distrib rows")
-    not_nan_flag = _inbounds_flag(along_length_coordinate,distrib,max_length,min_length)
-    L = @view along_length_coordinate[not_nan_flag]
-    D = @view distrib[not_nan_flag,:]
-    return _eval_stats(L,D,is_use_student)
-end
-"""
-_inbounds_flag(L,D,max_length,min_length)
-
-Unsafe version of check! number of  rows in `D` should be the same as the number of 
-elements in `L`
-Returns Bool flag of all row not containing NaN's and lying within the min_length to max_length range
-"""
-function _inbounds_flag(L,D,max_length,min_length)
-    not_nan_flag = Vector{Bool}(undef,size(D,1)) 
-    if max_length>0 && max_length < maximum(L)
-        if  min_length>0 && min_length>minimum(L)
-            for (i,r) in enumerate(eachrow(D))
-                @inbounds not_nan_flag[i] = !any(isnan,r) && L[i]<=max_length && L[i]>=min_length
-            end
-        else
-            for (i,r) in enumerate(eachrow(D))
-                @inbounds not_nan_flag[i] = !any(isnan,r) && L[i]<=max_length
-            end
-        end
-    else
-        for (i,r) in enumerate(eachrow(D))
-            @inbounds not_nan_flag[i] = !any(isnan,r)
-        end
-    end
-    return not_nan_flag
-end
-function _eval_stats(L,D,is_use_student)
-   mean_D = Vector{Float64}(undef,length(L))
-   #@show size(mean_D)
-   #@show size(D)
-    Statistics.mean!(mean_D,D)
-    std_D = vec(Statistics.stdm(D,mean_D,dims=2))
-    samples_number = size(D,2)
-    t_value = student_coefficient(samples_number,0.95)
-    l_b = similar(mean_D)
-    u_b = similar(mean_D)
-    if is_use_student
-        @. l_b = mean_D - t_value*std_D
-        @. u_b = mean_D + t_value*std_D
-    else
-        @. l_b = mean_D - std_D
-        @. u_p = mean_D + std_D
-    end
-    return (copy(L),mean_D,std_D,l_b,u_b,t_value)
-end
-
-"""
-angular_distribution_statistics(angles,along_length_coordinate,distrib;
-                            max_length=-1.0,is_use_student::Bool=true)
-
-Function evaluates average temperature distribution vs angle of orientation
-"""
-function angular_distribution_statistics(angles,along_length_coordinate,distrib;
-                            max_length=-1.0,min_length=-1.0,is_use_student::Bool=true)
-    
-    not_nan_flag = _inbounds_flag(along_length_coordinate,distrib,max_length,min_length)
-    #L = @view along_length_coordinate[not_nan_flag]
-    D =transpose( @view distrib[not_nan_flag,:])
-    return _eval_stats(angles,D,is_use_student)
-end
-"""
-points_within_line!(imag::AbstractMatrix,line_points::AbstractVector)
-
-Forces all line points to lie within the possible region according toe the image size
-"""
-function points_within_line!(imag::AbstractMatrix,line_points::AbstractVector)
-    sz = size(imag)
-    for (ind,l) in enumerate(line_points)
-        if l<=0
-            line_points[ind] = 1
-        else
-            s = isodd(ind) ? sz[1] : sz[2]
-            if  l>s
-                line_points[ind] = s
-            end
-        end
-    end
-    return line_points
-end
-
-

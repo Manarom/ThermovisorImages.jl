@@ -136,3 +136,49 @@ This function takes matrix of markers see [`marker_image`](@ref) and calculates 
 function   count_separate_patterns(markers::Matrix{Int})
     return maximum(markers)
 end
+
+"""
+marker_image(rescaled::RescaledImage,level_threshold::Float64,distance_threshold::Float64=1e-3)
+
+Markers image patterns, input umage is `RescaledImage` image type, 
+level_threshold  - should be between 0.0 and 1.0
+distance_threshold  - criterium of image binarization after distance transform
+
+returns `markers`  - matrix of Int's with the same size as the input matrix, each element 
+of `markers` is the label index of individual patterns of the initial image
+"""
+function marker_image(rescaled::RescaledImage;
+            level_threshold::Float64=-1.0,
+            distance_threshold::Float64=-15.0)
+
+    if level_threshold>1 || level_threshold <=0 # if threshold is not settled explicitly the otsu thresholding algorithm is used
+        level_threshold = otsu_threshold(rescaled.im)
+    end
+    # thermal image is an image with several region of higher temperature
+    # we want to implement the watershed algorithm to separate patterns from each other
+    # first we need to negate image 
+    
+    binarized = rescaled.im .< level_threshold
+    dist = distance_transform(feature_transform(binarized))
+    @. dist = 1 - dist
+    segments = watershed(dist, label_components(dist .< distance_threshold))
+
+    return MarkeredImage(labels_map(segments) .* (1 .-binarized))
+end
+
+"""
+        `filter_image(imag::RescaledImage,markers;label=0)`
+
+Funtion zeroes all pixels of the image, except those belonging to the specified pattern.
+`image` - rescaled image (see [`RescaledImage`](@ref) type)
+`markers` - the matrix of the same size as the input image, each element of this matrix has unique value-label associated with some pattern.  Function `label_components` returns the markers matrix.
+(optional) - the value of the label to be selected as a pattern marker
+
+Function returns [`FilteredImage`](@ref) object
+"""
+function filter_image(imag::RescaledImage,markers::MarkeredImage;label::Int=1)
+    # function extracts from markerd image
+    # markers - the matrix with all labeled elements
+    # imag - initial rescaled image 
+    return filter_image!(copy(imag.initial),external_flag(markers,label))
+end
