@@ -12,6 +12,7 @@ module ThermovisorData
     using Interpolations
     using  FileTypes
     using FileIO
+    using StatsBase
     import ImageDraw
 
     export RescaledImage,FilteredImage, MarkeredImage,

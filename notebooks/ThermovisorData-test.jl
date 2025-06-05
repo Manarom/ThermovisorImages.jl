@@ -17,7 +17,7 @@ macro bind(def, element)
 end
 
 # ╔═╡ 051044c5-760c-4b60-90fc-82a347c3b6bc
-using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO,Optim,CSV,Colors,ColorVectorSpace,Distributions,PerceptualColourMaps,StaticArrays,Interpolations,FileTypes,ImageDraw
+using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO,Optim,CSV,Colors,ColorVectorSpace,Distributions,PerceptualColourMaps,StaticArrays,Interpolations,FileTypes,ImageDraw,StatsBase
 
 # ╔═╡ e71f123c-284e-4107-8231-4031873f122c
 using Main.ThermovisorData # it always fails on the first run when Revise is in  use 
@@ -486,47 +486,10 @@ end;
 hcat(before_sorting,after_sorting)
 
 # ╔═╡ ecfd5449-29f6-452b-ae3d-d8e40932c8a0
-simshow(ThermovisorData.shrinked_flag(test_markers,1)[1])
+ThermovisorData.hist_area(fitted_rois_coins)
 
-# ╔═╡ 1fb56e7a-6bc5-4c9d-9de1-22a62e39bb66
-c1 = ThermovisorData.CircleObj()
-
-# ╔═╡ a7d6f66c-0774-419b-85ee-b8da74498227
-fl1 = ThermovisorData.shrinked_flag(test_markers,1);
-
-# ╔═╡ 3e408b86-bb21-4d48-8842-a21b054726be
-x0 = [1.0; 2.0; 3.0]
-
-# ╔═╡ 9d4a3283-26f4-45fb-ab26-7f55d9f01a4e
-ThermovisorData.fill_x0!(x0,fl1[1],c1)
-
-# ╔═╡ 4adf3ee6-742d-421d-bb54-dca02aebd833
-ThermovisorData.fit_centred_obj!(c1,fl1[1])
-
-# ╔═╡ 81b1776f-c527-4235-b84e-c9c912098220
-
-
-# ╔═╡ 3ab979f6-3a5f-4739-9c49-ff1e75a94a62
-ThermovisorData.area(c1)
-
-# ╔═╡ 0903ce52-3fe8-41fa-a0d8-bc65fa589d10
-begin 
-	#cent23 = RectangleObj([48,50],[35,25])
-	#im23= ThermovisorData.cent_to_flag(cent23,(100,100))
-	im23 = image_to_show .>30
-	fff = findall(im23)
-	 (min_i,max_i) = extrema(fff)
-	dinds = max_i - min_i + CartesianIndex(1,1)#indices difference
-	
-	fff_reduced = fill(false,Tuple.(dinds))
-	for inds in fff
-		#@show inds
-		inds_in = inds - min_i + CartesianIndex(1,1)
-		#@show inds_in
-		fff_reduced[inds_in] = im23[inds]
-	end
-	
-end
+# ╔═╡ df5ac719-8f69-4b5b-a4ea-e27bf5e2cf4f
+plot(ThermovisorData.hist_side(fitted_rois_coins))
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -552,6 +515,7 @@ Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 BenchmarkTools = "~1.6.0"
@@ -574,6 +538,7 @@ Plots = "~1.40.13"
 PlutoUI = "~0.7.62"
 Revise = "~3.8.0"
 StaticArrays = "~1.9.13"
+StatsBase = "~0.34.5"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -582,7 +547,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "e82ac9b332e83c68f12d647aaefe827c7a65d4a1"
+project_hash = "9cb990c0c5ea3de043711b3669d6be0564135acf"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "e2478490447631aedba0823d4d7a80b2cc8cdb32"
@@ -2863,13 +2828,6 @@ version = "1.8.1+0"
 # ╠═b640fcd0-3e49-471d-b281-87137a781eba
 # ╠═7a00ce43-94e2-4f68-b651-b57bf7d6ab05
 # ╠═ecfd5449-29f6-452b-ae3d-d8e40932c8a0
-# ╠═1fb56e7a-6bc5-4c9d-9de1-22a62e39bb66
-# ╠═a7d6f66c-0774-419b-85ee-b8da74498227
-# ╠═3e408b86-bb21-4d48-8842-a21b054726be
-# ╠═9d4a3283-26f4-45fb-ab26-7f55d9f01a4e
-# ╠═4adf3ee6-742d-421d-bb54-dca02aebd833
-# ╠═81b1776f-c527-4235-b84e-c9c912098220
-# ╠═3ab979f6-3a5f-4739-9c49-ff1e75a94a62
-# ╠═0903ce52-3fe8-41fa-a0d8-bc65fa589d10
+# ╠═df5ac719-8f69-4b5b-a4ea-e27bf5e2cf4f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
