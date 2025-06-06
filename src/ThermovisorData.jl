@@ -31,16 +31,15 @@ module ThermovisorData
         within_mask_line_distribution
 
     """
-    ThermovisorData
-
-is a package designed to process thermal images stored as matrices
+    ThermovisorData is a package designed to process thermal images stored as matrices.
 Each  element of thermal image represents a temperature value. The package enables users to 
 load images from files, calculate temperature distributions, and compute statistical analyses
 for temperatures along specified lines. It also calculates averaged angular and radial temperature
 distributions (along with standard deviations) within Regions of Interest (ROIs [`CentredObj`](@ref)) 
 such as  circles, squares, and rectangles. These ROI objects can be fitted to 
-distinct areas (relative to their surroundings), such as the most heated regions within
-the scene.
+distinct areas (relative to their surroundings - the most heated regions within
+the scene) using [`fit_all_patterns`](@ref). There is also possible to evaluate the averaged statistics 
+over the fitted ROI's using [`CentredObjCollectionStat`](@ref)
     
     """    
     ThermovisorData
@@ -62,11 +61,13 @@ the scene.
     
 
     """
-    read_temperature_file(f_name::AbstractString)
+    read_temperature_file(f_name::AbstractString;inverse_intensity::Bool=false)
 
-Reads temeprature file `f_name` is a full file name
+
+Reads temeprature file `f_name` is a full file name, `inverse_intensity` is true if 
+the intensities in the loaded file should be inverted
 """
-function read_temperature_file(f_name::AbstractString)
+function read_temperature_file(f_name::AbstractString;inverse_intensity::Bool=false)
 		if isfile(f_name)
 			file_full_path = f_name
 		else
@@ -79,9 +80,8 @@ function read_temperature_file(f_name::AbstractString)
         else
             im_float = CSV.Tables.matrix(CSV.File(file_full_path,header=false,types=Float64))
         end
-		pic = RescaledImage(im_float);
-		creation_time = mtime(file_full_path)
-		return (pic,creation_time)
+		pic = RescaledImage(im_float,inverse_intensity = inverse_intensity);
+		return pic
     end
     
     """

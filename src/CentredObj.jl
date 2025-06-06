@@ -104,6 +104,10 @@ center(c::CentredObj)=  c.center
 Object coordinates in reverse order
 """
 revcentre(c::CentredObj) = reverse(center(c))
+resize_proportional!(c::CentredObj;percents) = begin
+    @assert 0<percents<=100 "Size multiplier should be from 0 to 100"
+    c.dimensions .*= precents/100
+end
 """
     is_within_iterator(img::AbstractMatrix,c::CentredObj)
 
@@ -311,6 +315,7 @@ end
 name(::CircleObj) = "Circle"
 parnumber(::Type{CircleObj}) = 3
 diameter(c::CircleObj) = c.dimensions[]
+perimeter(c::CircleObj) = 2*π*radius(c)^2
 radius(c::CircleObj) = c.dimensions[]/2
 side(c::CircleObj) = diameter(c)
 area(c::CircleObj) = π*radius(c)^2
@@ -372,7 +377,7 @@ name(::SquareObj) = "Square"
 parnumber(::Type{SquareObj}) = 3
 area(c::SquareObj)=^(c.dimensions[],2)
 side(c::SquareObj) = c.dimensions[]
-
+perimeter(c::SquareObj) = 4*side(c)
 is_within(c::SquareObj,inds::AbstractVector) = begin
     a = side(c)/2
     c.center[1]-a <=inds[1]<=c.center[1]+a   && c.center[2]-a <=inds[2]<=c.center[2]+a
@@ -455,6 +460,7 @@ end
 name(::RectangleObj) = "Rectangle"
 parnumber(::Type{RectangleObj}) = 4
 area(c::RectangleObj)=*(side(c)...)
+perimeter(c::RectangleObj) = 2*sum(side(c))
 side(c::RectangleObj) = (c.dimensions[1],c.dimensions[2])
 is_within(c::RectangleObj,inds::AbstractVector) = begin
     (a,b) = side(c)

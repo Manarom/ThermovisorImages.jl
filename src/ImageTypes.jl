@@ -21,21 +21,22 @@ im - image with all values from 0 to 1
         min::T
         max::T
         im::Matrix{T}
-        RescaledImage(image::Matrix{T};negate::Bool=false) where T<:Number =begin
+        inverted::Bool
+        RescaledImage(image::Matrix{T};inverse_intensity::Bool=false) where T<:Number =begin
             sz = size(image)
-            new{T}(image,sz,rescale!(copy(image))...)
+            new{T}(image,sz,rescale!(copy(image),inverse_intensity=inverse_intensity)...)
         end
     end
     Base.size(image::RescaledImage) = image.sz
     Base.copy(image::RescaledImage) = RescaledImage(copy(image.initial))
-    function rescale!(image::AbstractMatrix;negate::Bool=false)
+    function rescale!(image::AbstractMatrix;inverse_intensity::Bool=false)
         min,max = extrema(image)
-        if !negate 
-            @. image = (image - min)/(max-min) 
-        else 
+        if inverse_intensity 
             @. image =(max - image)/(max-min)
+        else 
+            @. image = (image - min)/(max-min) 
         end
-        return (min,max,image)
+        return (min,max,image,inverse_intensity)
     end
     """
         Type to store image with filtered temperature region 
@@ -96,9 +97,9 @@ end
 Filters image according to centered object creating new image
 if external  is true than as a filtering flag the inverse of centered object image is taken
 """
-   filter_image(imag::AbstractMatrix,c::CentredObj;external=false) = filter_image!(copy(imag),cent_to_flag(c,size(imag),external= !external))
-   filter_image(imag,flag::FlagMatrix) =  filter_image!(copy(imag),flag)
-   filter_image(imag::RescaledImage;label = 1) = filter_image(imag,marker_image(imag),label=label)
+filter_image(imag::AbstractMatrix,c::CentredObj;external=false) = filter_image!(copy(imag),cent_to_flag(c,size(imag),external= !external))
+filter_image(imag,flag::FlagMatrix) =  filter_image!(copy(imag),flag)
+filter_image(imag::RescaledImage;label = 1) = filter_image(imag,marker_image(imag),label=label)
    """
     filter_image(imag::RescaledImage,c::CentredObj;external=false)
 
@@ -127,7 +128,7 @@ function filter_image!(imag::AbstractMatrix,external_region_flag::FlagMatrix)
     """
     filter_image!(imag::RescaledImage{Float64},external_region_flag::FlagMatrix)::FilteredImage
 
-In-place filtering of `RescaledImage`
+In-place filtering of `RescaledImage`, filtered object is wrapped around the input RescaledImage
 """
     function filter_image!(imag::RescaledImage{Float64},
         external_region_flag::FlagMatrix)::FilteredImage
@@ -138,7 +139,7 @@ In-place filtering of `RescaledImage`
         region_area_indices = findall(external_region_flag)
         min_ind,max_ind = extrema(region_area_indices)
         @. imag.im = imag.initial
-        rescale!(imag.im)
+        rescale!(imag.im,inverse_intensity=imag.inverted)
         square_view = @view  imag.initial[min_ind[1]:max_ind[1],min_ind[2]:max_ind[2]]
         square_view_flag =@view external_region_flag[min_ind[1]:max_ind[1],min_ind[2]:max_ind[2]]
         return FilteredImage(imag,

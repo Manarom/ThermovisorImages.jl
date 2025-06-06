@@ -138,14 +138,14 @@ function   count_separate_patterns(markers::Matrix{Int})
 end
 
 """
-marker_image(rescaled::RescaledImage,level_threshold::Float64,distance_threshold::Float64=1e-3)
+    marker_image(rescaled::RescaledImage,level_threshold::Float64,distance_threshold::Float64=1e-3)
 
-Markers image patterns, input umage is `RescaledImage` image type, 
-level_threshold  - should be between 0.0 and 1.0
-distance_threshold  - criterium of image binarization after distance transform
+    Markers image patterns, input umage is `RescaledImage` image type, 
+    level_threshold  - should be between 0.0 and 1.0
+    distance_threshold  - criterium of image binarization after distance transform
 
-returns `markers`  - matrix of Int's with the same size as the input matrix, each element 
-of `markers` is the label index of individual patterns of the initial image
+    returns `markers`  - matrix of Int's with the same size as the input matrix, each element 
+    of `markers` is the label index of individual patterns of the initial image
 """
 function marker_image(rescaled::RescaledImage;
             level_threshold::Float64=-1.0,
@@ -181,4 +181,9 @@ function filter_image(imag::RescaledImage,markers::MarkeredImage;label::Int=1)
     # markers - the matrix with all labeled elements
     # imag - initial rescaled image 
     return filter_image!(copy(imag.initial),external_flag(markers,label))
+end
+
+
+function Base.show(io::IO,m::MarkeredImage)
+    print(io, "Markered image of size $(size(m)) with $(length(m)) markered patterns")
 end

@@ -83,6 +83,7 @@ function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
 
            # markers_number = count_separate_patterns(markers)       
             markers_number = length(markers) 
+            markers_number>0 ? nothing : return Vector{T}([])
             is_reduced_markers_number = max_centred_objs < markers_number && max_centred_objs > 0
             if is_reduced_markers_number 
                 markers_number = max_centred_objs
@@ -92,11 +93,8 @@ function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
             elseif sort_by_area
                 sort_markers!(markers,is_descend)
             end    
-            if markers_number<=0 
-                 return Vector{T}([])  
-            else
-                centered_objs_to_fit = [T() for _ in 1:markers_number] # creating empty array of centred_objects
-            end
+            centered_objs_to_fit = [T() for _ in 1:markers_number] # creating empty array of centred_objects
+
             Threads.@sync for (i,c) in enumerate(centered_objs_to_fit)
                 Threads.@spawn begin 
                     (fl,i_min,i_max)  = shrinked_flag(markers,i) # returns flag and minimu and maximal indices in the initial array

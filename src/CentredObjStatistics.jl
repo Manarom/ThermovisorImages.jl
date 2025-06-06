@@ -1,5 +1,18 @@
 
 
+
+mean_side(v) = Statistics.mean(side,v)
+mean_area(v) = Statistics.mean(area,v)
+mean_perimeter(v) = Statistics.mean(perimeter,v)
+
+max_side(v) = maximum(side,v)
+max_area(v) = maximum(area,v)
+max_perimeter(v) = maximum(perimeter,v)
+
+min_side(v) = minimum(side,v)
+min_area(v) = minimum(area,v)
+min_perimeter(v) = minimum(perimeter,v)
+
 mean_side(v) = Statistics.mean(side,v)
 mean_area(v) = Statistics.mean(area,v)
 mean_perimeter(v) = Statistics.mean(perimeter,v)
@@ -13,11 +26,16 @@ hist_area(v,nbins::Int=-1) = nbins<=0 ? fit(Histogram,map(area,v)) : fit(Histogr
 hist_perimeter(v,nbins::Int=-1) = nbins<=0 ? fit(Histogram,map(perimeter,v)) : fit(Histogram,map(perimeter,v),nbins=nbins)
 
 struct CentredObjCollectionStat{T}
+    N::Int
+    maxs::T
+    mins::T
     means::T
     stds::T
     hists::T
-    CentredObjCollectionStat(v::Vector{CentredObj};nbins::Int=-1)= begin
-            new{NamedTuple{(:side,:area,:perimeter)}}(
+    CentredObjCollectionStat(v::Vector{C};nbins::Int=-1) where C<:CentredObj= begin
+            new{NamedTuple{(:side,:area,:perimeter)}}(length(v),
+                (max_side(v),max_area(v),max_perimeter(v)),
+                (min_side(v),min_area(v),min_perimeter(v)),
                 (mean_side(v),mean_area(v),mean_perimeter(v)),
                 (std_side(v),std_area(v),std_perimeter(v)),
                 (hist_side(v,nbins),hist_area(v,nbins),hist_perimeter(v,nbins))
@@ -26,7 +44,12 @@ struct CentredObjCollectionStat{T}
 end
 
 function Base.show(io::IO,s::CentredObjCollectionStat)
-    print(io, "$(name(c)) with center at ($(center(c)[1]) , $(center(c)[2])) and size  ($(join(string.(dimensions(c)),",")))")
+    println(io,)
+    println(io,"""Statistics summary on $(s.N) rois:
+                side = $(s.means.side) ±  $(s.stds.side) in range from $(s.mins.side) to  $(s.maxs.side)
+                area = $(s.means.area) ±  $(s.stds.area) in range from  $(s.mins.area) to  $(s.maxs.area)
+                perimeter = $(s.means.perimeter) ±  $(s.stds.perimeter) in range from  $(s.mins.perimeter) to  $(s.maxs.perimeter)
+    """)
 end
 
 """

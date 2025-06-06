@@ -19,9 +19,6 @@ end
 # ╔═╡ 051044c5-760c-4b60-90fc-82a347c3b6bc
 using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO,Optim,CSV,Colors,ColorVectorSpace,Distributions,PerceptualColourMaps,StaticArrays,Interpolations,FileTypes,ImageDraw,StatsBase
 
-# ╔═╡ e71f123c-284e-4107-8231-4031873f122c
-using Main.ThermovisorData # it always fails on the first run when Revise is in  use 
-
 # ╔═╡ 4460f260-f65f-446d-802c-f2197f4d6b27
 md"""
 ### This notebook demostrates main features of `ThermovisorData.jl` package
@@ -55,9 +52,14 @@ begin# we need the project structrue inside the notebook
 	sources_path = joinpath(project_path,"src")# it is supposed that sources are in separate folder \project_folder\src\
 	assets_folder = joinpath(project_path,"assets")
 	images_folder = joinpath(project_path,"thermal images")
-	temp_folder = joinpath(images_folder,"temp")
-	toggle_button_state = Ref(false)
 end;
+
+# ╔═╡ f6c1be87-94d2-4b08-a52d-6eb637192ee8
+begin 
+	includet(joinpath(sources_path,"ThermovisorData.jl"))
+# include(joinpath(sources_path,"ThermovisorData.jl")) #replace includet with include if Revise is not needed
+	using Main.ThermovisorData
+end
 
 # ╔═╡ 4f93b7ba-3488-446d-8043-718fbdc5b808
 import Gtk
@@ -65,9 +67,8 @@ import Gtk
 # ╔═╡ 215ed2f4-71ba-4cb5-b198-677d0d7ffb38
 md" default image saving folder $(@bind image_save_folder PlutoUI.TextField(default = assets_folder))"
 
-# ╔═╡ f6c1be87-94d2-4b08-a52d-6eb637192ee8
-includet(joinpath(sources_path,"ThermovisorData.jl"))
-# include(joinpath(sources_path,"ThermovisorData.jl")) #replace includet with include if Revise is not needed
+# ╔═╡ e71f123c-284e-4107-8231-4031873f122c
+ # it always fails on the first run when Revise is in  use 
 
 # ╔═╡ 870113c3-b439-4d34-90d8-fdd8a158f9dd
 md"""
@@ -109,9 +110,8 @@ end
 # ╔═╡ 794ebd5e-e9e0-4772-98a9-43e20c7ef4da
 #reading selected file
 begin 
-	(rescaled_image,file_date) = ThermovisorData.read_temperature_file(files_in_dir[temp_to_load][2])
-	Dates.unix2datetime(file_date)
-end
+	rescaled_image = ThermovisorData.read_temperature_file(files_in_dir[temp_to_load][2])
+end;
 
 # ╔═╡ 429cf33f-4422-44f0-beb8-5a1908a72273
 md"""
@@ -140,7 +140,7 @@ begin
 		append!(test_coord_vect,test_side_b)
 	end
 	test_centre_obj = ThermovisorData.obj_from_vect(test_mask_type,test_coord_vect)
-	is_make_obj_selfy ? centre_obj_image = draw(test_centre_obj,thickness=25) : nothing
+	is_make_obj_selfy ? centre_obj_image = ThermovisorData.draw(test_centre_obj,thickness=25) : nothing
 	
 	rgb_image_initial = ThermovisorData.draw!(rescaled_image.initial,color_scheme="HEAT",test_centre_obj,show_cross = true)
 			imag_initial_show = ThermovisorData.draw_line_within_mask!(rgb_image_initial,test_centre_obj,0,10,color_scheme="R1")
@@ -250,6 +250,9 @@ md"""
 
 	"""
 
+# ╔═╡ 71eb240a-5a45-4bf3-b35c-a5820ca6da6c
+md" Fit the ROI to image $(@bind is_fit_mask CheckBox(false))"
+
 # ╔═╡ 4e1a5050-59b0-4d24-98bb-1520c06b28c5
 begin 
 	coord_vect = [mask_center_y,mask_center_x,side_a]
@@ -259,9 +262,6 @@ begin
 	centre_obj = ThermovisorData.obj_from_vect(mask_type,coord_vect)
 	#is_make_obj_selfy ? centre_obj_image = draw(centre_obj,thickness=25) : nothing
 end
-
-# ╔═╡ 71eb240a-5a45-4bf3-b35c-a5820ca6da6c
-md" Hitting this checkbox forces the ROI to fit the temperature pattern $(@bind is_fit_mask CheckBox(false))"
 
 # ╔═╡ 768535e0-a514-4dff-ac8b-0d7ca126149c
 # fitting the loaded image
@@ -289,9 +289,6 @@ end;
 # ╔═╡ 5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
 fitted_obj
 
-# ╔═╡ 59f9a7f2-9601-431c-a897-543fa25c64c4
-fitted_obj
-
 # ╔═╡ e1ccfd33-3d54-4249-86f1-381a1ef90615
 md"""
 The upper figure shows the ROI and the inclined line which goes through its center. By adjusting ROI position, the orientation and the length of this line temperature distribution of some feature can be studied. \
@@ -314,6 +311,9 @@ begin
 	pl_distrib=ThermovisorData.plot_along_line_distribution(along_line_length,distrib,is_centered = true)
 	#pl_distrib
 end
+
+# ╔═╡ 59f9a7f2-9601-431c-a897-543fa25c64c4
+fitted_obj
 
 # ╔═╡ d45f106d-032a-4102-a26f-7393c2220f72
 md"Evaluate radial distribution $(@bind is_rad_distr_eval CheckBox(false))"
@@ -373,6 +373,11 @@ md"""
 	Click this button to generate the image pattern $(@bind fit_multiple Button("Regenerate patterns"))
 	"""
 
+# ╔═╡ a76e0a08-393e-472a-8df5-0650eb6a60af
+md"""
+Select objects on image types = $(@bind image_patterns_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) 
+"""
+
 # ╔═╡ 6e728ea6-38be-437a-96b4-9fa084f8fec5
 md"""
 Select objects ROI type = $(@bind multifit_roi_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) 
@@ -384,28 +389,28 @@ md"Initial image with randomly distributed patterns"
 # ╔═╡ d5b6f453-5e92-41e6-a45f-cb75660bc198
 begin # generating pattern 
 	fit_multiple
-	Patterns_number = 5 #total number of patterns
-	image_size = (640,640)
+	patterns_number = 100
+	image_size = (500,1000)
 	img = fill(0.0,image_size...)# filling initial scene
-	rnd_centre() = [rand(1:image_size[1]),rand(1:image_size[2])] # random center positions
-	rnd_diam() = rand(10:10:30) # random diameter generator
-	# filling the vector of initial ROIs
-	centered_objs = [CircleObj(rnd_centre(),rnd_diam()) for _ in 1:Patterns_number]
-	for c in centered_objs
-		img[c]=1 # centred objects can be used as indices in images 
+	generated_rois = ThermovisorData.generate_random_objs(image_patterns_type,(1:1:image_size[1],1:1:image_size[2]),patterns_number,5:1:20)
+	for r in generated_rois
+		img[r] = 10.0
 	end
 	rs = RescaledImage(img)
 	markers = ThermovisorData.marker_image(rs,distance_threshold = 0.0)
 	separate_patterns_number = length(markers) # now we need to check for the separate patterns number 
-	rgb_markers = ThermovisorData.draw(Float64.(markers.markers))	# converting to rgb image
-end
+	rgb_markers = ThermovisorData.draw(rs)	# converting to rgb image
+end;
+
+# ╔═╡ 9c13d94e-ca2f-41d6-922a-428bb7a476c8
+generated_patterns_stat = ThermovisorData.CentredObjCollectionStat(generated_rois)
 
 # ╔═╡ 96ad6e27-52dd-41aa-b115-f852049a485a
 md"""Number of separate patterns:    $(separate_patterns_number)"""
 
 # ╔═╡ 0badf26a-38fa-45be-9704-d4e80b12a9cb
 md"""
-	Select this checkbox to fit all objects $(@bind is_fit_multiple CheckBox(default=false))
+	Select this checkbox to fit all objects $(@bind is_fit_multiple CheckBox(default=true))
 	"""
 
 # ╔═╡ 6adfae4d-5137-4692-b9f3-3793c4c76202
@@ -414,16 +419,31 @@ begin # fitting ROI's to image with several
 	if is_fit_multiple
 
 		fitted_rois = ThermovisorData.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0,sort_by_area=true)
-		rgb_image_multi_roi = ThermovisorData.draw!(img,fitted_rois[1],show_cross = true,fill=true)
-		for i in 2:length(fitted_rois)
-			 ThermovisorData.draw!(rgb_image_multi_roi,fitted_rois[i],thickness = 1,fill=true,show_cross = true)
+		if length(fitted_rois)>0
+			rgb_image_multi_roi = ThermovisorData.draw!(img,fitted_rois[1],show_cross = true,fill=true)
+			for i in 2:length(fitted_rois)
+			 	ThermovisorData.draw!(rgb_image_multi_roi,fitted_rois[i],thickness = 		1,fill=true,show_cross = true)
+			end
+			[rgb_markers;rgb_image_multi_roi]
+		else
+			rgb_markers
 		end
-		rgb_image_multi_roi
-		#
 	else
-		nothing
+		println("There is no fitted ROIs")
 	end
 end
+
+# ╔═╡ f1512fc5-4a7a-4274-9d42-3057d9aec04f
+StatOnRois = ThermovisorData.CentredObjCollectionStat(fitted_rois,nbins=Int(floor(patterns_number/12)))
+
+# ╔═╡ 2925fafa-4722-4335-ba49-77c6a8fb110b
+md"""
+Show histogram for $(@bind selected_hist Select([:side,:area,:perimeter]))
+
+"""
+
+# ╔═╡ e7e6884a-1145-4a01-a429-6c4a84e7ea33
+plot(getfield(StatOnRois.hists,selected_hist),title="Distribution of ROIs by "*string(selected_hist),label=nothing,alpha=0.5)
 
 # ╔═╡ 68b33b39-5ef5-4560-b4b2-1fe2f43a3628
 md" Save multiple patterns fit ? $(@bind is_save_multipattern_fit CheckBox(default=false))"
@@ -443,16 +463,21 @@ md"""
 	Show/hide rois $(@bind is_draw_rois Select( ["show" ;"hide" ]))
 	"""
 
-# ╔═╡ 2af862c2-c026-43a8-82e3-77ff8cb2095c
+# ╔═╡ febd591e-bb9f-4b21-93c8-aafd4c81ce12
 begin
-	im_coin = load(download("http://docs.opencv.org/3.1.0/water_coins.jpg"))
-	im_coin_float = 1 .- Float64.(Gray.(im_coin))
-	
-	rescaled_coin = ThermovisorData.RescaledImage(im_coin_float)
+	coins_file = joinpath(images_folder,"coins.jpg")
+	if !isfile(coins_file)
+		download("http://docs.opencv.org/3.1.0/water_coins.jpg",coins_file)
+	end	
+	rescaled_coin = ThermovisorData.read_temperature_file(coins_file,inverse_intensity=true)
 	markers_coins = ThermovisorData.marker_image(rescaled_coin)
-	
+	im_coin_float = rescaled_coin.initial
 	fitted_rois_coins = ThermovisorData.fit_all_patterns(rescaled_coin,multifit_roi_type)
-	if is_draw_rois=="show"
+end
+
+# ╔═╡ 0044c49b-1c72-4f78-97ee-87932c97d2a9
+begin
+		if is_draw_rois=="show"
 		rgb_image_coins = ThermovisorData.draw!(im_coin_float,fitted_rois_coins[1],show_cross = true,fill=true)
 		for i in 2:length(fitted_rois_coins)
 				 ThermovisorData.draw!(rgb_image_coins,fitted_rois_coins[i],thickness = 1,fill=true,show_cross = true)
@@ -468,17 +493,7 @@ end
 begin 
 	test_markers = ThermovisorData.marker_image(rescaled_coin)
 	before_sorting = simshow(test_markers.markers)
-	inds = Vector{Int}(undef,length(test_markers))
-	@show areas_vals = ThermovisorData.areas(test_markers)
-	sortperm!(inds,areas_vals,rev=true)
-	permute!(test_markers.ViewsVect,inds)
-	@show ThermovisorData.areas(test_markers)
-	for i = 1:length(test_markers)
-        #v = view(test_markers.markers,test_markers.ViewsVect[i])
-		#fill!(v,i)
-		test_markers[i] = i
-    end
-	@show ThermovisorData.areas(test_markers)
+	ThermovisorData.sort_markers!(test_markers)
 	after_sorting = simshow(test_markers.markers)
 end;
 
@@ -486,10 +501,7 @@ end;
 hcat(before_sorting,after_sorting)
 
 # ╔═╡ ecfd5449-29f6-452b-ae3d-d8e40932c8a0
-ThermovisorData.hist_area(fitted_rois_coins)
-
-# ╔═╡ df5ac719-8f69-4b5b-a4ea-e27bf5e2cf4f
-plot(ThermovisorData.hist_side(fitted_rois_coins))
+plot(ThermovisorData.hist_side(fitted_rois_coins,3),label=nothing,title="Distribution of objects by side")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2783,9 +2795,9 @@ version = "1.8.1+0"
 # ╠═43a1fb58-cd5e-4634-8770-0ff1809b2191
 # ╠═cd12d201-3dac-48c7-bd53-7c76944f5816
 # ╟─9fe323c0-9afc-43fd-bc21-1c45b73d50e0
-# ╟─794ebd5e-e9e0-4772-98a9-43e20c7ef4da
-# ╟─429cf33f-4422-44f0-beb8-5a1908a72273
-# ╠═854731c1-7a34-4066-aa74-01629c87d75d
+# ╠═794ebd5e-e9e0-4772-98a9-43e20c7ef4da
+# ╠═429cf33f-4422-44f0-beb8-5a1908a72273
+# ╟─854731c1-7a34-4066-aa74-01629c87d75d
 # ╟─48c53ed9-127d-4e8e-bd29-416292057bff
 # ╟─9f55febb-b047-4b22-8575-209d45354d51
 # ╟─4feea216-ee48-42a3-b4ba-454f28ff690a
@@ -2802,6 +2814,7 @@ version = "1.8.1+0"
 # ╟─6d37916c-7895-49d3-b8a3-c8661050ebcb
 # ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
 # ╟─c67290fc-6291-4f3e-a660-a3c4afa3a5e3
+# ╟─71eb240a-5a45-4bf3-b35c-a5820ca6da6c
 # ╟─4e1a5050-59b0-4d24-98bb-1520c06b28c5
 # ╠═42a7b186-aa04-4249-a129-bf925f181008
 # ╟─e1ccfd33-3d54-4249-86f1-381a1ef90615
@@ -2809,25 +2822,29 @@ version = "1.8.1+0"
 # ╟─59f9a7f2-9601-431c-a897-543fa25c64c4
 # ╟─39e50296-21ff-4407-894f-2a380dc51e21
 # ╟─ca05bd4f-5656-4531-b357-331c62661174
-# ╟─71eb240a-5a45-4bf3-b35c-a5820ca6da6c
 # ╟─d45f106d-032a-4102-a26f-7393c2220f72
 # ╟─e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
 # ╟─b4ce12e3-29ec-41ac-89d3-06d08ef2beca
 # ╟─764a320c-ff6b-48d0-a5b4-48a3df3ece01
 # ╟─10954f10-9414-4839-872f-c2516d5d8e4e
+# ╟─a76e0a08-393e-472a-8df5-0650eb6a60af
 # ╟─6e728ea6-38be-437a-96b4-9fa084f8fec5
-# ╠═cc909b53-ed4d-44a1-a410-ff25533afc2d
+# ╟─cc909b53-ed4d-44a1-a410-ff25533afc2d
 # ╟─d5b6f453-5e92-41e6-a45f-cb75660bc198
+# ╟─9c13d94e-ca2f-41d6-922a-428bb7a476c8
 # ╟─96ad6e27-52dd-41aa-b115-f852049a485a
 # ╟─0badf26a-38fa-45be-9704-d4e80b12a9cb
-# ╠═6adfae4d-5137-4692-b9f3-3793c4c76202
+# ╟─6adfae4d-5137-4692-b9f3-3793c4c76202
+# ╟─f1512fc5-4a7a-4274-9d42-3057d9aec04f
+# ╟─2925fafa-4722-4335-ba49-77c6a8fb110b
+# ╟─e7e6884a-1145-4a01-a429-6c4a84e7ea33
 # ╟─68b33b39-5ef5-4560-b4b2-1fe2f43a3628
 # ╟─8a132aba-aa8a-428a-84a2-0ab6e5e2b891
-# ╠═821a7c95-f4da-410d-b780-111abb6d0db5
-# ╠═2af862c2-c026-43a8-82e3-77ff8cb2095c
-# ╠═b640fcd0-3e49-471d-b281-87137a781eba
-# ╠═7a00ce43-94e2-4f68-b651-b57bf7d6ab05
+# ╟─821a7c95-f4da-410d-b780-111abb6d0db5
+# ╟─febd591e-bb9f-4b21-93c8-aafd4c81ce12
+# ╟─0044c49b-1c72-4f78-97ee-87932c97d2a9
+# ╟─b640fcd0-3e49-471d-b281-87137a781eba
+# ╟─7a00ce43-94e2-4f68-b651-b57bf7d6ab05
 # ╠═ecfd5449-29f6-452b-ae3d-d8e40932c8a0
-# ╠═df5ac719-8f69-4b5b-a4ea-e27bf5e2cf4f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
