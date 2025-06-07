@@ -98,7 +98,7 @@ function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
             Threads.@sync for (i,c) in enumerate(centered_objs_to_fit)
                 Threads.@spawn begin 
                     (fl,i_min,i_max)  = shrinked_flag(markers,i) # returns flag and minimu and maximal indices in the initial array
-                    ThermovisorData.fit_centred_obj!(c,fl,optimizer = optimizer,options = options)
+                    fit_centred_obj!(c,fl,optimizer = optimizer,options = options)
                     shift!(c,i_min - CartesianIndex(1,1))
                 end
             end

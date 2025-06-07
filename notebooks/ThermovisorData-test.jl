@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.6
+# v0.20.9
 
 using Markdown
 using InteractiveUtils
@@ -21,13 +21,13 @@ using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,Fi
 
 # ╔═╡ 4460f260-f65f-446d-802c-f2197f4d6b27
 md"""
-### This notebook demostrates main features of `ThermovisorData.jl` package
+### This notebook demostrates main features of `ThermovisorImages.jl` package
 #
-**ThervisorData.jl** is a small package designed to process static thermal images stored as matrices. Each matrix element represents a temperature value. This package enables users to load images from csv files, calculate temperature distributions, and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (regions that stand out from the background).
-
+**ThermovisorImages.jl** is a small package designed to process static thermal images stored as matrices in csv-files or as images. For csv data each matrix element represents a temperature value. `ThermovisorImages.jl` enables users to load images from csv files, calculate temperature distributions and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (regions that stand out from the background).
+Package uses `Image.jl` package to label image features and `Optim.jl` package to fit the ROIs to this features. After fitting the temperature distribution 
 The image can also be filtered to remove all other patterns from the image except the one with selected mark.
 
-This package was written to study the temperature distribution across the heated sample for the emissivity measuring facility described in this [`paper`](https://link.springer.com/article/10.1007/s00340-024-08331-9)
+This package was designed to study the temperature distribution across the heated sample for the emissivity measuring facility described in this [`paper`](https://link.springer.com/article/10.1007/s00340-024-08331-9)
 
 """
 
@@ -368,11 +368,6 @@ In this block we are going to create the image with multiple randomly distribute
 
 """
 
-# ╔═╡ 10954f10-9414-4839-872f-c2516d5d8e4e
-md"""
-	Click this button to generate the image pattern $(@bind fit_multiple Button("Regenerate patterns"))
-	"""
-
 # ╔═╡ a76e0a08-393e-472a-8df5-0650eb6a60af
 md"""
 Select objects on image types = $(@bind image_patterns_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) 
@@ -386,13 +381,31 @@ Select objects ROI type = $(@bind multifit_roi_type Select([CircleObj=>"circle",
 # ╔═╡ cc909b53-ed4d-44a1-a410-ff25533afc2d
 md"Initial image with randomly distributed patterns"
 
+# ╔═╡ 0badf26a-38fa-45be-9704-d4e80b12a9cb
+md"""
+	Select this checkbox to fit all objects $(@bind is_fit_multiple CheckBox(default=true))
+	"""
+
+# ╔═╡ f8154558-d0cb-4b27-8c0d-b5cac07a099c
+md"Patterns size range $(@bind pattern_sizes_range confirm(RangeSlider(2:1:100)))"
+
+# ╔═╡ 39e31290-e7b5-47ce-ac46-aebc33ddfa54
+md"""
+	Number of patterns $(@bind patterns_number confirm(PlutoUI.Slider(1:1:200,default=10,show_value=true)))
+	"""
+
+# ╔═╡ 10954f10-9414-4839-872f-c2516d5d8e4e
+md"""
+	Click this button to generate the image pattern $(@bind fit_multiple Button("Regenerate patterns"))
+	"""
+
 # ╔═╡ d5b6f453-5e92-41e6-a45f-cb75660bc198
 begin # generating pattern 
 	fit_multiple
-	patterns_number = 100
+	#patterns_number = 100
 	image_size = (500,1000)
 	img = fill(0.0,image_size...)# filling initial scene
-	generated_rois = ThermovisorData.generate_random_objs(image_patterns_type,(1:1:image_size[1],1:1:image_size[2]),patterns_number,5:1:20)
+	generated_rois = ThermovisorData.generate_random_objs(image_patterns_type,(1:1:image_size[1],1:1:image_size[2]),patterns_number,pattern_sizes_range)
 	for r in generated_rois
 		img[r] = 10.0
 	end
@@ -407,11 +420,6 @@ generated_patterns_stat = ThermovisorData.CentredObjCollectionStat(generated_roi
 
 # ╔═╡ 96ad6e27-52dd-41aa-b115-f852049a485a
 md"""Number of separate patterns:    $(separate_patterns_number)"""
-
-# ╔═╡ 0badf26a-38fa-45be-9704-d4e80b12a9cb
-md"""
-	Select this checkbox to fit all objects $(@bind is_fit_multiple CheckBox(default=true))
-	"""
 
 # ╔═╡ 6adfae4d-5137-4692-b9f3-3793c4c76202
 begin # fitting ROI's to image with several 
@@ -601,13 +609,12 @@ version = "1.3.2"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "f7817e2e585aa6d924fd714df1e2a84be7896c60"
+git-tree-sha1 = "cde29ddf7e5726c9fb511f340244ea3481267608"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "4.3.0"
-weakdeps = ["SparseArrays", "StaticArrays"]
+version = "3.7.2"
+weakdeps = ["StaticArrays"]
 
     [deps.Adapt.extensions]
-    AdaptSparseArraysExt = "SparseArrays"
     AdaptStaticArraysExt = "StaticArrays"
 
 [[deps.AliasTables]]
@@ -627,21 +634,16 @@ uuid = "ec485272-7323-5ecc-a04f-4719b315124d"
 version = "0.4.0"
 
 [[deps.ArrayInterface]]
-deps = ["Adapt", "LinearAlgebra"]
-git-tree-sha1 = "9606d7832795cbef89e06a550475be300364a8aa"
+deps = ["Adapt", "LinearAlgebra", "Requires", "SparseArrays", "SuiteSparse"]
+git-tree-sha1 = "c5aeb516a84459e0318a02507d2261edad97eb75"
 uuid = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
-version = "7.19.0"
+version = "7.7.1"
 
     [deps.ArrayInterface.extensions]
     ArrayInterfaceBandedMatricesExt = "BandedMatrices"
     ArrayInterfaceBlockBandedMatricesExt = "BlockBandedMatrices"
     ArrayInterfaceCUDAExt = "CUDA"
-    ArrayInterfaceCUDSSExt = "CUDSS"
-    ArrayInterfaceChainRulesCoreExt = "ChainRulesCore"
-    ArrayInterfaceChainRulesExt = "ChainRules"
     ArrayInterfaceGPUArraysCoreExt = "GPUArraysCore"
-    ArrayInterfaceReverseDiffExt = "ReverseDiff"
-    ArrayInterfaceSparseArraysExt = "SparseArrays"
     ArrayInterfaceStaticArraysCoreExt = "StaticArraysCore"
     ArrayInterfaceTrackerExt = "Tracker"
 
@@ -649,12 +651,7 @@ version = "7.19.0"
     BandedMatrices = "aae01518-5342-5314-be14-df237901396f"
     BlockBandedMatrices = "ffab5731-97b5-5995-9138-79e8c1846df0"
     CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-    CUDSS = "45b445bb-4962-46a0-9369-b4df9d0f772e"
-    ChainRules = "082447d4-558c-5d27-93f4-14fc19e9eca2"
-    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
     GPUArraysCore = "46192b85-c4d5-4398-a991-12ede77f4527"
-    ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
-    SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
     StaticArraysCore = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
     Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
 
@@ -1021,9 +1018,9 @@ version = "0.3.2"
 
 [[deps.FFTW]]
 deps = ["AbstractFFTs", "FFTW_jll", "LinearAlgebra", "MKL_jll", "Preferences", "Reexport"]
-git-tree-sha1 = "797762812ed063b9b94f6cc7742bc8883bb5e69e"
+git-tree-sha1 = "7de7c78d681078f027389e067864a8d53bd7c3c9"
 uuid = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
-version = "1.9.0"
+version = "1.8.1"
 
 [[deps.FFTW_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1391,10 +1388,10 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 version = "1.11.0"
 
 [[deps.Interpolations]]
-deps = ["AxisAlgorithms", "ChainRulesCore", "LinearAlgebra", "OffsetArrays", "Random", "Ratios", "Requires", "SharedArrays", "SparseArrays", "StaticArrays", "WoodburyMatrices"]
-git-tree-sha1 = "00a19d6ab0cbdea2978fc23c5a6482e02c192501"
+deps = ["Adapt", "AxisAlgorithms", "ChainRulesCore", "LinearAlgebra", "OffsetArrays", "Random", "Ratios", "Requires", "SharedArrays", "SparseArrays", "StaticArrays", "WoodburyMatrices"]
+git-tree-sha1 = "721ec2cf720536ad005cb38f50dbba7b02419a15"
 uuid = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
-version = "0.14.0"
+version = "0.14.7"
 
 [[deps.IntervalSets]]
 git-tree-sha1 = "5fbb102dcb8b1a858111ae81d56682376130517d"
@@ -2782,7 +2779,7 @@ version = "1.8.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╟─4460f260-f65f-446d-802c-f2197f4d6b27
+# ╠═4460f260-f65f-446d-802c-f2197f4d6b27
 # ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
 # ╠═fc6af4b0-1127-11f0-1b66-a59d87c5b141
 # ╠═051044c5-760c-4b60-90fc-82a347c3b6bc
@@ -2795,8 +2792,8 @@ version = "1.8.1+0"
 # ╠═43a1fb58-cd5e-4634-8770-0ff1809b2191
 # ╠═cd12d201-3dac-48c7-bd53-7c76944f5816
 # ╟─9fe323c0-9afc-43fd-bc21-1c45b73d50e0
-# ╠═794ebd5e-e9e0-4772-98a9-43e20c7ef4da
-# ╠═429cf33f-4422-44f0-beb8-5a1908a72273
+# ╟─794ebd5e-e9e0-4772-98a9-43e20c7ef4da
+# ╟─429cf33f-4422-44f0-beb8-5a1908a72273
 # ╟─854731c1-7a34-4066-aa74-01629c87d75d
 # ╟─48c53ed9-127d-4e8e-bd29-416292057bff
 # ╟─9f55febb-b047-4b22-8575-209d45354d51
@@ -2826,7 +2823,6 @@ version = "1.8.1+0"
 # ╟─e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
 # ╟─b4ce12e3-29ec-41ac-89d3-06d08ef2beca
 # ╟─764a320c-ff6b-48d0-a5b4-48a3df3ece01
-# ╟─10954f10-9414-4839-872f-c2516d5d8e4e
 # ╟─a76e0a08-393e-472a-8df5-0650eb6a60af
 # ╟─6e728ea6-38be-437a-96b4-9fa084f8fec5
 # ╟─cc909b53-ed4d-44a1-a410-ff25533afc2d
@@ -2834,6 +2830,9 @@ version = "1.8.1+0"
 # ╟─9c13d94e-ca2f-41d6-922a-428bb7a476c8
 # ╟─96ad6e27-52dd-41aa-b115-f852049a485a
 # ╟─0badf26a-38fa-45be-9704-d4e80b12a9cb
+# ╟─f8154558-d0cb-4b27-8c0d-b5cac07a099c
+# ╟─39e31290-e7b5-47ce-ac46-aebc33ddfa54
+# ╟─10954f10-9414-4839-872f-c2516d5d8e4e
 # ╟─6adfae4d-5137-4692-b9f3-3793c4c76202
 # ╟─f1512fc5-4a7a-4274-9d42-3057d9aec04f
 # ╟─2925fafa-4722-4335-ba49-77c6a8fb110b

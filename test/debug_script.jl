@@ -165,3 +165,8 @@ segments = watershed(dist, dist .< distance_threshold)
 #markers = label_components(dist .< distance_threshold)
 return map(i->get_random_color(i), labels_map(segments)) .* (1 .-binarized)  #labels_map(segments) #.* (1 .-binarized)
 end
+
+using .ThermovisorImages
+
+im = read_temperature_file(raw"D:\JuliaDepoth\dev\ThermovisorData.jl\thermal images\S_T500.csv")
+roi = ThermovisorImages.fit_all_patterns(im)

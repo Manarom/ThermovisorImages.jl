@@ -1,4 +1,4 @@
-module ThermovisorData
+module ThermovisorImages
     using Images,ImageShow,ImageIO
     using Plots,CSV
     using Colors, ColorVectorSpace
@@ -34,12 +34,14 @@ module ThermovisorData
     ThermovisorData is a package designed to process thermal images stored as matrices.
 Each  element of thermal image represents a temperature value. The package enables users to 
 load images from files, calculate temperature distributions, and compute statistical analyses
-for temperatures along specified lines. It also calculates averaged angular and radial temperature
-distributions (along with standard deviations) within Regions of Interest (ROIs [`CentredObj`](@ref)) 
-such as  circles, squares, and rectangles. These ROI objects can be fitted to 
-distinct areas (relative to their surroundings - the most heated regions within
-the scene) using [`fit_all_patterns`](@ref). There is also possible to evaluate the averaged statistics 
-over the fitted ROI's using [`CentredObjCollectionStat`](@ref)
+for temperatures along specified lines. Thermal image can be loaded using [`read_temperature_file`](@ref).
+User defined matrix can be wrapped in [`RescaledImage`](@ref) which simple maps the values to [0,1] interval. 
+After that, distinct areas (relative to their surroundings,like the most heated regions within
+the scene) can be fitted to regions of interest (ROIs) using [`fit_all_patterns`](@ref). 
+Firther temperature distribution along the specified lined within each ROI can be obtained, and average radial and
+There is also possible to evaluate the averaged statistics 
+over the fitted ROI's using [`CentredObjCollectionStat`](@ref).
+After that the image patterns can be labeled using the [`marker_image`](@ref) function which returns  
     
     """    
     ThermovisorData
@@ -80,8 +82,7 @@ function read_temperature_file(f_name::AbstractString;inverse_intensity::Bool=fa
         else
             im_float = CSV.Tables.matrix(CSV.File(file_full_path,header=false,types=Float64))
         end
-		pic = RescaledImage(im_float,inverse_intensity = inverse_intensity);
-		return pic
+		return RescaledImage(im_float,inverse_intensity = inverse_intensity)
     end
     
     """

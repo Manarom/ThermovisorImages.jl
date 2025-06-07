@@ -76,13 +76,14 @@ max_length - maximal value of along_length_coordinate to be includet in to the s
 is_use_student - flag if use students's coefficient
 
 """
-function radial_distribution_statistics(along_length_coordinate::AbstractVector,distrib::AbstractVecOrMat;
-        max_length=-1.0,min_length=-1.0,is_use_student::Bool=true)
+function radial_distribution_statistics(along_length_coordinate::AbstractVector,
+        distrib::AbstractVecOrMat;
+        max_length=-1.0,min_length=-1.0)
             @assert(length(along_length_coordinate)==size(distrib,1),"Vector of coordinate should have the same length as the number of distrib rows")
             not_nan_flag = _inbounds_flag(along_length_coordinate,distrib,max_length,min_length)
             L = @view along_length_coordinate[not_nan_flag]
             D = @view distrib[not_nan_flag,:]
-            return _eval_stats(L,D,is_use_student)
+            return DistributionStatistics(L,D)
 end
 """
 _inbounds_flag(L,D,max_length,min_length)
@@ -110,26 +111,35 @@ function _inbounds_flag(L,D,max_length,min_length)
     end
     return not_nan_flag
 end
-function _eval_stats(L,D,is_use_student)
-   mean_D = Vector{Float64}(undef,length(L))
-   #@show size(mean_D)
-   #@show size(D)
-    Statistics.mean!(mean_D,D)
-    std_D = vec(Statistics.stdm(D,mean_D,dims=2))
-    samples_number = size(D,2)
-    t_value = student_coefficient(samples_number,0.95)
-    l_b = similar(mean_D)
-    u_b = similar(mean_D)
-    if is_use_student
-        @. l_b = mean_D - t_value*std_D
-        @. u_b = mean_D + t_value*std_D
-    else
-        @. l_b = mean_D - std_D
-        @. u_p = mean_D + std_D
-    end
-    return (copy(L),mean_D,std_D,l_b,u_b,t_value)
-end
 
+struct DistributionStatistics{T}
+    coordinate::T
+    mean_D::T
+    std_D::T
+    samples_number::Int
+    DistributionStatistics(coordinate,D) = begin
+        len = length(coordinate)
+        len != size(D,1) ? throw(DomainError("Inappropriate size of D and coordinates")) : nothing
+        mean_D = similar(coordinate)
+        Statistics.mean!(mean_D,D)
+        std_D = vec(Statistics.stdm(D,mean_D,dims=2))
+        samples_number = size(D,2)
+        return new{typeof(coordinate)}(copy(coordinate),mean_D,std_D,samples_number)   
+    end     
+end
+ """
+    eval_bounds(DS::DistributionStatistics;is_use_student::Bool=true)
+
+Evaluates confidence bounds
+"""
+function eval_bounds(DS::DistributionStatistics;is_use_student::Bool=true,probability::Float64=0.95)
+    t_value =  is_use_student ?  student_coefficient(DS.samples_number,probability) : 1.0
+    l_b = copy(DS.mean_D)
+    u_b = copy(DS.mean_D)
+    @. l_b -= t_value*DS.std_D
+    @. u_b += t_value*DS.std_D
+    return (l_b,u_b,t_value)
+ end
 """
 angular_distribution_statistics(angles,along_length_coordinate,distrib;
                             max_length=-1.0,is_use_student::Bool=true)
@@ -137,12 +147,12 @@ angular_distribution_statistics(angles,along_length_coordinate,distrib;
 Function evaluates average temperature distribution vs angle of orientation
 """
 function angular_distribution_statistics(angles,along_length_coordinate,distrib;
-                            max_length=-1.0,min_length=-1.0,is_use_student::Bool=true)
+                            max_length=-1.0,min_length=-1.0,probability::Float64=0.95)
     
     not_nan_flag = _inbounds_flag(along_length_coordinate,distrib,max_length,min_length)
     #L = @view along_length_coordinate[not_nan_flag]
     D =transpose( @view distrib[not_nan_flag,:])
-    return _eval_stats(angles,D,is_use_student)
+    return DistributionStatistics(angles,D)
 end
 """
 points_within_line!(imag::AbstractMatrix,line_points::AbstractVector)
@@ -206,36 +216,43 @@ end
     Plots radial ditribution averaged value, confidence bounds and confidence bounds
     multiplied by the Student's coefficient
 """
-function plot_radial_distribution_statistics(L,mean_D::T,std_D::T,
-        lower_bound::Union{T,Nothing}=nothing,upper_bound::Union{T,Nothing}=nothing;
+function plot_radial_distribution_statistics(ds::DistributionStatistics;
+                show_lower_bound::Bool=false,
+                show_upper_bound::Bool=false,
+                is_use_student::Bool=true,
+                probability::Float64=0.95,
                 length_scaler::Float64=1.0,
                 is_centered::Bool=true,label=nothing,
-                minorgrid=true,gridlinewidth=2,title="Average temperature radial distribution",framestyle = :box,
-                dpi=600,xlabel = L"Distance  \ across \ the \ sample ,mm", ylabel=L"Temperature \ \degree C",
-                kwargs...)      where T<:AbstractVector
-        points_number = Base.length(L)
+                minorgrid=true,
+                gridlinewidth=2,title="Average temperature radial distribution",framestyle = :box,
+                dpi=600,xlabel = L"Distance  \ across \ the \ sample ,mm", 
+                ylabel=L"Temperature \ \degree C",
+                kwargs...)
+        points_number = length(ds.coordinate)
         if is_centered || length_scaler != 1.0
-            L2plot = copy(L)
+            L2plot = copy(ds.coordinate)
             if is_centered
-                l_center = L[int_floor(points_number/2)] 
-                @. L2plot= L-l_center
+                l_center = L2plot[int_floor(points_number/2)] 
+                @. L2plot -= l_center
             end
             L2plot .*=length_scaler
         else
-            L2plot=L
+            L2plot=ds.coordinate
         end    
 	    p=plot(L2plot,
-		    mean_D,label=label,
+		    ds.mean_D,label=label,
 		    minorgrid=minorgrid,
 		    gridlinewidth=gridlinewidth,
 		    title=title,
-		    ribbon = (std_D,std_D), framestyle = framestyle,dpi=dpi,kwargs...)
+		    ribbon = (ds.std_D,ds.std_D), framestyle = framestyle,dpi=dpi,kwargs...)
 	    xlabel!(p,xlabel)
 	    ylabel!(p,ylabel)
-        !isnothing(lower_bound) ? plot!(p,L2plot,lower_bound,linecolor=:red,label=nothing) : nothing
-        !isnothing(upper_bound) ?  plot!(p,L2plot,upper_bound,linecolor=:red,label=nothing) : nothing
+        if show_lower_bound || show_upper_bound
+            (lower_bound,upper_bound) = eval_bounds(ds,is_use_student=is_use_student,probability=probability)
+            show_lower_bound ? plot!(p,L2plot,lower_bound,linecolor=:red,label=nothing) : nothing
+            show_upper_bound ? plot!(p,L2plot,upper_bound,linecolor=:red,label=nothing) : nothing
+        end
         return p
-
     end
     """
     plot_angular_distribution_statistics(angles,mean_D::T,std_D::T,
@@ -250,22 +267,27 @@ function plot_radial_distribution_statistics(L,mean_D::T,std_D::T,
 
  The same as `plot_radial_distribution_statistics` but plots averaged angular distribution
 """
-function plot_angular_distribution_statistics(angles,mean_D::T,std_D::T,
-                lower_bound::Union{T,Nothing}=nothing,upper_bound::Union{T,Nothing}=nothing;
+function plot_angular_distribution_statistics(ds::DistributionStatistics;
+                show_lower_bound::Bool=true,
+                show_upper_bound::Bool=true,
+                probability::Float64=0.95,
+                is_use_student::Bool=true,
                 length_scaler::Float64=1.0,
                 label=nothing,
                 minorgrid=true,
                 gridlinewidth=2,
                 title="Average temperature angular distribution",framestyle = :box,
                 dpi=600,xlabel = L"Angle  \ ,\degree", ylabel=L"Temperature \ \degree C",
-                kwargs...)      where T<:AbstractVector
+                kwargs...)
 
-                return plot_radial_distribution_statistics(angles,mean_D,std_D,
-                        lower_bound,upper_bound;
+                return plot_radial_distribution_statistics(ds,
+                        show_lower_bound=show_lower_bound,show_upper_bound=show_upper_bound,
+                        probability=probability,is_use_student=is_use_student,
                         length_scaler=length_scaler,
                         is_centered=false,
                         label=label,
-                        minorgrid=minorgrid,gridlinewidth=gridlinewidth,
+                        minorgrid=minorgrid,
+                        gridlinewidth=gridlinewidth,
                         title=title,framestyle = framestyle,
                         dpi=dpi,xlabel = xlabel, ylabel=ylabel,
                         kwargs...) 
@@ -315,7 +337,6 @@ function generate_random_objs(::Type{T},centers_range::NTuple{2,R},obj_number::I
         rnd_centre() = [rand(centers_range[1]);rand(centers_range[2])] # random center positions
         rnd_diam() = rand(dimension_range,dim_number) # random diameter generator
         # filling the vector of initial ROIs
-        
         return  [obj_from_vect(T,vcat(rnd_centre(),rnd_diam())) for _ in 1:obj_number]
     end
 
