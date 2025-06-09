@@ -119,7 +119,11 @@ Iterator over all `CartesianIndices` within the `img` which are within the Centr
 """
 function is_within_iterator(img::AbstractMatrix,c::CentredObj)
     return Iterators.filter(i->is_within(c,i),keys(img))
-end   
+end
+
+function c_view(img::AbstractMatrix,c::CentredObj)
+    return @view img[cent_to_flag(c,size(img))]
+end
 """
     Base.getindex(img::AbstractMatrix,c::CentredObj)
 
@@ -135,7 +139,7 @@ Base.setindex!(img::Matrix,x::Array,c::CentredObj)
 img[c]=x assignes all x elements to the elements of `img` with indices lying within the `CentredObj` c
 """
 function Base.setindex!(img::Matrix,x::Array,c::CentredObj)
-    @assert firstindex(x)==1 # check if it is not obset array
+    @assert firstindex(x)==1 # check if it is not offset array
     for (ix,iimg) in enumerate(is_within_iterator(img,c))
         img[iimg] = x[ix]
     end
@@ -177,7 +181,7 @@ end
 """
 cent_to_flag(::Type{T},c::CentredObj,sz::Tuple{Int,Int};external=false) where T<:FlagMatrix
 
-Converts centred obj to BitMatrix of the Matrix of bool see `FlagMatrix
+Converts centred obj to BitMatrix or the Matrix of bool see `FlagMatrix
 """
 function cent_to_flag(::Type{T},c::CentredObj,sz::Tuple{Int,Int};external=false) where T<:FlagMatrix
     external_part_flag = T(undef,sz...)
@@ -358,7 +362,7 @@ function line_within_mask(c::CircleObj,ang,line_length)
                    c.center[2] +  lsin]
 end
 function convert_to_drawable(c::CircleObj;fill=false,thickness::Int=-1)
-    if (thickness==-1)&& !fill
+    if (thickness==-1)&& !fill || thickness >= radius(c)
         thickness = int_floor(0.17*diameter(c))
     end
     return ImageDraw.CirclePointRadius(c.center[2],c.center[1],radius(c),thickness=thickness,fill=fill)

@@ -10,9 +10,10 @@ module ThermovisorImages
     using ColorSchemes # to draw heatmaps
     using StaticArrays
     using Interpolations
-    using  FileTypes
+    using  FileTypes # to check the type of load
     using FileIO
     using StatsBase
+    import PlanckFunctions as Planck
     import ImageDraw
 
     export RescaledImage,FilteredImage, MarkeredImage,
@@ -46,7 +47,10 @@ After that the image patterns can be labeled using the [`marker_image`](@ref) fu
     """    
     ThermovisorImages
 
-    const default_images_folder = Ref(joinpath(abspath(joinpath(@__DIR__, "..")),"thermal images"))
+    const default_images_folder = Ref(@eval begin 
+                        images_path = joinpath(abspath(joinpath(@__DIR__(), "..")),"thermal images")
+                        return isdir(images_path) ? images_path : @__DIR__()
+    end)
     const FlagMatrix = Union{Matrix{Bool},BitMatrix}
     const FlagVector = Union{Vector{Bool},BitVector}
     const int_floor_abs = Int ∘ floor ∘ abs
@@ -55,6 +59,7 @@ After that the image patterns can be labeled using the [`marker_image`](@ref) fu
     const DefColorScheme = Ref(ColorSchemes.inferno)# default colorscheme 
     const DefRoiColor = Ref(RGB{Float64}(0,1,0))# default roi frame color
     const DEFAULT_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1,iterations=50))
+    const DEFAULT_TEMPERATURE_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1e-4,iterations=50))
 
     include("CentredObj.jl") # 
     include("CentredObjStatistics.jl")
@@ -71,7 +76,9 @@ After that the image patterns can be labeled using the [`marker_image`](@ref) fu
 Reads temeprature file `f_name` is a full file name, `inverse_intensity` is true if 
 the intensities in the loaded file should be inverted
 """
-function read_temperature_file(f_name::AbstractString;inverse_intensity::Bool=false)
+function read_temperature_file(f_name::AbstractString;
+                    inverse_intensity::Bool=false,
+                    color_scheme=:none)
 		if isfile(f_name)
 			file_full_path = f_name
 		else
@@ -79,8 +86,16 @@ function read_temperature_file(f_name::AbstractString;inverse_intensity::Bool=fa
             isfile(file_full_path) ? nothing : return nothing
 		end
         if Is(FileType.Image, file_full_path)
-            
-            im_float = Float64.(Gray.(FileIO.load(file_full_path)))
+            im_data = FileIO.load(file_full_path)
+            im_float = Matrix{Float64}(undef,size(im_data)[1:2])
+            if haskey(colorschemes,color_scheme)
+                map!(x-> getinverse(colorschemes[color_scheme], x),im_float,im_data)
+            else
+                if color_scheme!=:none
+                    println("Entered color_scheme `$(color_scheme)` is not supported using uniform convereter")
+                end
+                map!( Float64∘Gray ,im_float,im_data)
+            end
         else
             im_float = CSV.Tables.matrix(CSV.File(file_full_path,header=false,types=Float64))
         end
@@ -117,6 +132,29 @@ function find_temperature_files(folder::AbstractString=default_images_folder[])
             end
         end
         return files
+    end
+    function recalculate_with_new_emissivity!(image::AbstractArray,new_emissivity::Float64;
+                                        image_emissivity::Float64=1.0,
+                                        λ_left::Float64=14.0,
+                                        λ_right::Float64=14.5,
+                                        is_in_kelvins::Bool=false)
+        @assert 0 < new_emissivity <= 1.0 "Wrong emissivity value emissivity must be within (0,1] region "
+        
+        optimizer = Optim.Brent()
+        #options = DEFAULT_TEMPERATURE_FITTING_OPTIONS[]
+        Threads.@sync for (i,t) in enumerate(image)
+            Threads.@spawn begin
+                t_meas= is_in_kelvins ? t : t + Planck.Tₖ
+                t_init =  t_meas*(image_emissivity/new_emissivity)^0.25 
+                func = thermal_discrepancy_fun(t_meas,λ_left,λ_right,image_emissivity,new_emissivity)
+                optim_out = optimize(func,t_init/2,1.5*t_init,optimizer,rel_tol=1e-2)#,optimizer,)
+                image[i] = is_in_kelvins ? optim_out.minimizer : optim_out.minimizer - Planck.Tₖ
+            end
+        end  
+        return image
+    end
+    function thermal_discrepancy_fun(t_meas::T,λ_left::T,λ_right::T,e_in::T,e_out::T) where T<:Float64
+        return t->(e_in*Planck.band_power(t_meas, λₗ=λ_left,  λᵣ=λ_right) - e_out*Planck.band_power(t, λₗ=λ_left,  λᵣ=λ_right))^2
     end
     """
         is_temperature_file(file_name::AbstractString)

@@ -215,8 +215,8 @@ end
                 gridlinewidth=2,
                 title="Average temperature radial distribution",
                 framestyle = :box,
-                dpi=600,xlabel = L"Distance  \ across \ the \ sample ,mm", 
-                ylabel=L"Temperature \ \degree C",
+                dpi=600,xlabel = Distance  across the sample ,mm", 
+                ylabel=L"Temperature °C",
                 kwargs...)
 
 Plots radial ditribution averaged value, confidence bounds and confidence bounds
@@ -348,6 +348,11 @@ function generate_random_objs(::Type{T},centers_range::NTuple{2,R},obj_number::I
         return  [obj_from_vect(T,vcat(rnd_centre(),rnd_diam())) for _ in 1:obj_number]
     end
 
+"""
+    generate_random_objs!(im::Matrix{Float64},::Type{T},obj_number::Int,dimension_range::R) where {T<:CentredObj,R<:StepRange{Int,Int}}
+
+Generates random objects on the image `im` see [`generate_random_objs`](@ref)
+"""
 function generate_random_objs!(im::Matrix{Float64},::Type{T},obj_number::Int,dimension_range::R) where {T<:CentredObj,R<:StepRange{Int,Int}}
     centers_range = (1:1:size(im,1),1:1:size(im,2))
     objs = generate_random_objs(T,centers_range,obj_number,dimension_range)

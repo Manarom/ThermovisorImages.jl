@@ -170,3 +170,24 @@ using .ThermovisorImages
 
 im = read_temperature_file(raw"D:\JuliaDepoth\dev\ThermovisorData.jl\thermal images\S_T500.csv")
 roi = ThermovisorImages.fit_all_patterns(im)
+
+
+    using ImageShow
+    source_dir = joinpath(abspath(joinpath(@__DIR__, "..")),"src")
+
+    include(joinpath(source_dir,"ThermovisorImages.jl"))
+    im1 = ThermovisorImages.read_temperature_file(raw"E:\JULIA\JULIA_DEPOT\dev\ThermovisorData\thermal images\T500.csv")
+    simshow(im1.initial)
+    #c = ThermovisorImages.CircleObj()
+    #fltrd = ThermovisorImages.filter_image(im1;label = 1)
+    #ThermovisorImages.fit_centred_obj!(c,fltrd)
+    #markers = ThermovisorImages.marker_image(im1)
+    roi = ThermovisorImages.fit_all_patterns(im1,ThermovisorImages.CircleObj)
+    if isempty(roi)
+        return "empty"
+    end
+    y = copy(im1.initial)
+    y_view = ThermovisorImages.c_view(y,roi[1])
+    t = @time ThermovisorImages.recalculate_with_new_emissivity!(y_view,0.5)
+    @show t
+    simshow(y)

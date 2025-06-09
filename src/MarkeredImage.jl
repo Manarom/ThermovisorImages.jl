@@ -8,6 +8,9 @@ struct MarkeredImage
     MarkeredImage(markers::Matrix{Int}) = begin
         flag = similar(markers,Bool)
         max_label = maximum(markers)
+        if max_label<1
+            return new(markers,Vector{Vector{CartesianIndex{2}}}([])) 
+        end
         map!(i->i==1 ,flag, markers)
         ViewsVect = Vector{Vector{CartesianIndex{2}}}(undef,max_label)
         ViewsVect[1] = findall(flag)

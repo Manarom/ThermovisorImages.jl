@@ -69,18 +69,13 @@ img - input image of [`RescaledImage`](@ref) type
 
 For other input arguments see [`marker_image`](@ref) and [`fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix)`](@ref)
 """
-function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
-                                            level_threshold::Float64=-1.0,
-                                            distance_threshold::Float64=-15.0,
+function fit_all_patterns!(markers::MarkeredImage,::Type{T}=CircleObj;
                                             max_centred_objs::Int=200,
                                             sort_by_area::Bool = false,
                                             is_descend::Bool = true,
                                             optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
                                             options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
                                             
-            markers = marker_image(img,level_threshold=level_threshold,
-                                    distance_threshold=distance_threshold)     
-
            # markers_number = count_separate_patterns(markers)       
             markers_number = length(markers) 
             markers_number>0 ? nothing : return Vector{T}([])
@@ -93,17 +88,43 @@ function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
             elseif sort_by_area
                 sort_markers!(markers,is_descend)
             end    
-            centered_objs_to_fit = [T() for _ in 1:markers_number] # creating empty array of centred_objects
-
-            Threads.@sync for (i,c) in enumerate(centered_objs_to_fit)
+            c_vect = [T() for _ in 1:markers_number] # creating empty array of centred_objects
+            return fit_all_patterns!(c_vect, markers, optimizer,options)
+    end  
+    function fit_all_patterns!(c_vect::Vector{T},
+                            markers::MarkeredImage,
+                            optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
+                            options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
+            
+            Threads.@sync for (i,c) in enumerate(c_vect)
                 Threads.@spawn begin 
-                    (fl,i_min,i_max)  = shrinked_flag(markers,i) # returns flag and minimu and maximal indices in the initial array
+                    (fl,i_min,_)  = shrinked_flag(markers,i) # returns flag and minimu and maximal indices in the initial array
                     fit_centred_obj!(c,fl,optimizer = optimizer,options = options)
                     shift!(c,i_min - CartesianIndex(1,1))
                 end
             end
-            return centered_objs_to_fit
-    end  
+            return c_vect
+    end
+    function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
+                                    level_threshold::Float64=-1.0,
+                                    distance_threshold::Float64=-15.0,
+                                    max_centred_objs::Int=200,
+                                    sort_by_area::Bool = false,
+                                    is_descend::Bool = true,
+                                    optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
+                                    options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
+        # level_threshold::Float64=-1.0,
+        # distance_threshold::Float64=-15.0
+        markers = marker_image(img,level_threshold=level_threshold,
+                                distance_threshold=distance_threshold)
+
+        return length(markers)>0 ? fit_all_patterns!(markers,T;
+                                max_centred_objs=max_centred_objs,
+                                sort_by_area=sort_by_area,
+                                is_descend = is_descend,
+                                optimizer=optimizer,
+                                options=options) : Vector{T}([])
+    end
     """
     image_discr(im1,im2)
 
@@ -112,7 +133,11 @@ Calculates the scalar distance between two matrices by checking the equality of 
 function image_discr(im1,im2)
         # calculates distance between two bit-images of the same size 
         N = prod(size(im1))
-        return sum(1 - i[1]==i[2] for i in zip(im1,im2))/(2*N)
+        d = 0
+        for i in 1:length(im1)
+            @inline d += im1[i]!=im2[i]
+        end
+        return d/(2*N)#sum(1 - i[1]==i[2] for i in zip(im1,im2))/(2*N)
     end
 
 
