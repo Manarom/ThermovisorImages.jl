@@ -147,7 +147,7 @@ angular_distribution_statistics(angles,along_length_coordinate,distrib;
 Function evaluates average temperature distribution vs angle of orientation
 """
 function angular_distribution_statistics(angles,along_length_coordinate,distrib;
-                            max_length=-1.0,min_length=-1.0,probability::Float64=0.95)
+                            max_length=-1.0,min_length=-1.0)
     
     not_nan_flag = _inbounds_flag(along_length_coordinate,distrib,max_length,min_length)
     #L = @view along_length_coordinate[not_nan_flag]
@@ -155,7 +155,7 @@ function angular_distribution_statistics(angles,along_length_coordinate,distrib;
     return DistributionStatistics(angles,D)
 end
 """
-points_within_line!(imag::AbstractMatrix,line_points::AbstractVector)
+    points_within_line!(imag::AbstractMatrix,line_points::AbstractVector)
 
 Forces all line points to lie within the possible region according toe the image size
 """
@@ -175,7 +175,7 @@ function points_within_line!(imag::AbstractMatrix,line_points::AbstractVector)
 end
 
 """
-line_points_to_along_length(along_line_points::Vector{T},line_points) where T
+    line_points_to_along_length(along_line_points::Vector{T},line_points) where T
 
 Converts Cartesian indices of `along_line_points` to the length along line
 """
@@ -191,7 +191,7 @@ end
 """
     student_coefficient(degrees_of_freedom::Int, probability; digits::Int = 3, side::Int = 2)
 
-    Evaluates Student's distribution coefficient
+Evaluates Student's distribution coefficient
 """
 function student_coefficient(degrees_of_freedom::Int, probability; digits::Int = 3, side::Int = 2)
 	# dof - degrees of freedome
@@ -204,17 +204,23 @@ end
 
 
 """
-    plot_radial_distribution_statistics(L,mean_D::T,std_D::T,
-        lower_bound::Union{T,Nothing}=nothing,upper_bound::Union{T,Nothing}=nothing;
+    plot_radial_distribution_statistics(ds::DistributionStatistics;
+                show_lower_bound::Bool=false,
+                show_upper_bound::Bool=false,
+                is_use_student::Bool=true,
+                probability::Float64=0.95,
                 length_scaler::Float64=1.0,
                 is_centered::Bool=true,label=nothing,
-                minorgrid=true,gridlinewidth=2,title="Average temperature radial distribution",
+                minorgrid=true,
+                gridlinewidth=2,
+                title="Average temperature radial distribution",
                 framestyle = :box,
-                dpi=600,xlabel = "Distance  across the sample ,mm", ylabel="Temperature  °C",
-                kwargs...)      where T<:AbstractVector
+                dpi=600,xlabel = L"Distance  \ across \ the \ sample ,mm", 
+                ylabel=L"Temperature \ \degree C",
+                kwargs...)
 
-    Plots radial ditribution averaged value, confidence bounds and confidence bounds
-    multiplied by the Student's coefficient
+Plots radial ditribution averaged value, confidence bounds and confidence bounds
+multiplied by the Student's coefficient
 """
 function plot_radial_distribution_statistics(ds::DistributionStatistics;
                 show_lower_bound::Bool=false,
@@ -224,7 +230,9 @@ function plot_radial_distribution_statistics(ds::DistributionStatistics;
                 length_scaler::Float64=1.0,
                 is_centered::Bool=true,label=nothing,
                 minorgrid=true,
-                gridlinewidth=2,title="Average temperature radial distribution",framestyle = :box,
+                gridlinewidth=2,
+                title="Average temperature radial distribution",
+                framestyle = :box,
                 dpi=600,xlabel = L"Distance  \ across \ the \ sample ,mm", 
                 ylabel=L"Temperature \ \degree C",
                 kwargs...)

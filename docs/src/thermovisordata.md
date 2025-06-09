@@ -1,6 +1,6 @@
-# Functions and types of ThermovisorData 
+# Functions and types of ThermovisorImages
 
 ```@autodocs
-    Modules = [ThermovisorData]
+    Modules = [ThermovisorImages]
     Order   = [:type,:function]
 ```

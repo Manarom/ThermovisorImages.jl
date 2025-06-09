@@ -51,8 +51,7 @@ function parnumber(::Type{T}) where T<:CentredObj    error(DomainError(T,"Undefi
 Empty object constructor
 """
 function (::Type{T})() where T<:CentredObj
-N = parnumber(T)
-obj_from_vect(T,Vector{Int}(undef,N))
+    obj_from_vect(T,Vector{Int}(undef,parnumber(T)))
 end
 """
     copyobj(c::T) where T<:CentreObj
@@ -63,7 +62,7 @@ function copyobj(c::T) where T<:CentredObj
     return obj_from_vect(T,[c.center...,c.dimensions...])
 end    
 """
-Base.length(c::CentredObj)
+    Base.length(c::CentredObj)
 
 Total number of values needed to create [`CentredObj`](@ref) of specified type
 """
@@ -75,16 +74,21 @@ function Base.show(io::IO, c::C) where C<:CentredObj
     print(io, "$(name(c)) with center at ($(center(c)[1]) , $(center(c)[2])) and size  ($(join(string.(dimensions(c)),",")))")
 end
 """
-is_within(c::CentredObj,_)
+    is_within(c::CentredObj,_)
 
 Function to check if indices are within [`CentredObj`](@ref)
 """
 is_within(c::CentredObj,_)=error(DomainError(typeof(c),"no `is_within` implementation"))
 dimenisons(c::CentredObj)=  error(DomainError(typeof(c),"no `dimentions` implementation"))
+"""
+    side(c::CentredObj)
+
+Returns the side of `CentredObj`
+"""
 side(c::CentredObj) = maximum(dimensions(c))
 name(c::CentredObj) =  "No name"
 """
-is_within(c::CentredObj,i::CartesianIndex)
+    is_within(c::CentredObj,i::CartesianIndex)
 
 `CartesianIndex` support
 """
@@ -117,7 +121,7 @@ function is_within_iterator(img::AbstractMatrix,c::CentredObj)
     return Iterators.filter(i->is_within(c,i),keys(img))
 end   
 """
-Base.getindex(img::AbstractMatrix,c::CentredObj)
+    Base.getindex(img::AbstractMatrix,c::CentredObj)
 
 `CentredObj` can be used for matrix indexing, `image[centred_object]` - returns the vector 
 of temperatures of all points of image lying within the `centred_object` of `CentredObj`
@@ -256,7 +260,6 @@ Return dimensional parameters (vector)
 """
 function dimensions(c::CentredObj)  c.dimensions end
 
-name(c::CentredObj) = "CentredObj"
 # arithmetic operations on CentredObj
 """
     Base.isless(c1::CentredObj,c2::CentredObj)

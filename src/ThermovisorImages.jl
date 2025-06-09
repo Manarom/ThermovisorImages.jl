@@ -7,7 +7,7 @@ module ThermovisorImages
     using Optim
     using LaTeXStrings
     using Distributions # to evaluate the Students coefficient
-    using PerceptualColourMaps # to draw heatmaps
+    using ColorSchemes # to draw heatmaps
     using StaticArrays
     using Interpolations
     using  FileTypes
@@ -44,7 +44,7 @@ over the fitted ROI's using [`CentredObjCollectionStat`](@ref).
 After that the image patterns can be labeled using the [`marker_image`](@ref) function which returns  
     
     """    
-    ThermovisorData
+    ThermovisorImages
 
     const default_images_folder = Ref(joinpath(abspath(joinpath(@__DIR__, "..")),"thermal images"))
     const FlagMatrix = Union{Matrix{Bool},BitMatrix}
@@ -52,8 +52,10 @@ After that the image patterns can be labeled using the [`marker_image`](@ref) fu
     const int_floor_abs = Int ∘ floor ∘ abs
     const int_floor = Int ∘ floor
     const int_floor_fld = Int ∘ floor ∘ fld
-    const DefColorScheme = Ref("HEAT")
+    const DefColorScheme = Ref(ColorSchemes.inferno)# default colorscheme 
+    const DefRoiColor = Ref(RGB{Float64}(0,1,0))# default roi frame color
     const DEFAULT_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1,iterations=50))
+
     include("CentredObj.jl") # 
     include("CentredObjStatistics.jl")
     include("ImageTypes.jl")
@@ -117,7 +119,7 @@ function find_temperature_files(folder::AbstractString=default_images_folder[])
         return files
     end
     """
-        `is_temperature_file(file_name::AbstractString)`
+        is_temperature_file(file_name::AbstractString)
 
 Checks if the file with `file_name` has an appropriate name for thermovisor temperature distribution file
 """
