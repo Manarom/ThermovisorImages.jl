@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.6
+# v0.20.9
 
 using Markdown
 using InteractiveUtils
@@ -283,12 +283,11 @@ begin
 	end
 	if is_fit_mask 
 		fit_centred_obj!(fitted_obj,filtered_by_markers, image_type=="filtered") 
-		@show fitted_obj
-		mm_per_pixel[]=sqrt((0.25π*25^2)/area(fitted_obj))
+		fitted_obj
+		mm_per_pixel[]=sqrt((0.25π*25^2)/ThermovisorImages.area(fitted_obj))
 	else
 		mm_per_pixel[]=1.0
 	end
-	
 end;
 
 # ╔═╡ 5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
@@ -320,34 +319,30 @@ end
 # ╔═╡ 59f9a7f2-9601-431c-a897-543fa25c64c4
 fitted_obj
 
-# ╔═╡ d45f106d-032a-4102-a26f-7393c2220f72
-md"Evaluate radial distribution $(@bind is_rad_distr_eval CheckBox(false))"
-
 # ╔═╡ 39e50296-21ff-4407-894f-2a380dc51e21
 begin 
 	
-	if is_rad_distr_eval
+	
 		new_line =line_length# minimum(side(fitted_obj))-5
 		ang_range = 0.0:1:60 # range of angles 
-		R,D = ThermovisorImages.radial_distribution(image_to_show,fitted_obj,ang_range,line_length=new_line,length_per_pixel=mm_per_pixel[])
+		(R,D) = ThermovisorImages.radial_distribution(image_to_show,fitted_obj,ang_range,line_length=new_line,length_per_pixel=mm_per_pixel[])
 
-		(L,meanD,stdD,l_b,u_b,t_values) = ThermovisorImages.radial_distribution_statistics(R,D)
+		DS = ThermovisorImages.radial_distribution_statistics(R,D)
 
-		
-		p_radial = ThermovisorImages.plot_radial_distribution_statistics(L,meanD,stdD,
-        	l_b,u_b)
+		p_radial = ThermovisorImages.plot_radial_distribution_statistics(DS,show_lower_bound=true,show_upper_bound=true,probability=0.99)
 
-	end
 end
+
+# ╔═╡ d45f106d-032a-4102-a26f-7393c2220f72
+md"Evaluate radial distribution $(@bind is_rad_distr_eval CheckBox(false))"
 
 # ╔═╡ ca05bd4f-5656-4531-b357-331c62661174
 begin 
 	if is_rad_distr_eval
 	angs = collect(ang_range)
-	(angs_plot,Dang,stdDang,l_bang,u_bang,t_valuesang) = ThermovisorImages.angular_distribution_statistics(angs,R,D)
+	angular_DS = ThermovisorImages.angular_distribution_statistics(angs,R,D)
 	
-	p_angular = ThermovisorImages.plot_angular_distribution_statistics(angs_plot,Dang,stdDang,
-        	l_bang,u_bang)
+	p_angular = ThermovisorImages.plot_angular_distribution_statistics(angular_DS)
 	end
 end
 
@@ -392,11 +387,11 @@ md"""
 	"""
 
 # ╔═╡ f8154558-d0cb-4b27-8c0d-b5cac07a099c
-md"Patterns size range $(@bind pattern_sizes_range confirm(RangeSlider(2:1:100)))"
+md"Patterns size range $(@bind pattern_sizes_range confirm(RangeSlider(5:1:100,default=5:1:20)))"
 
 # ╔═╡ 39e31290-e7b5-47ce-ac46-aebc33ddfa54
 md"""
-	Number of patterns $(@bind patterns_number confirm(PlutoUI.Slider(1:1:200,default=10,show_value=true)))
+	Number of patterns $(@bind patterns_number confirm(PlutoUI.Slider(1:1:200,default=30,show_value=true)))
 	"""
 
 # ╔═╡ 10954f10-9414-4839-872f-c2516d5d8e4e
@@ -435,7 +430,7 @@ begin # fitting ROI's to image with several
 		if length(fitted_rois)>0
 			rgb_image_multi_roi = ThermovisorImages.draw!(img,fitted_rois[1],show_cross = true,fill=true)
 			for i in 2:length(fitted_rois)
-			 	ThermovisorImages.draw!(rgb_image_multi_roi,fitted_rois[i],thickness = 		1,fill=true,show_cross = true)
+			 	ThermovisorImages.draw!(rgb_image_multi_roi,fitted_rois[i],fill=true,show_cross = true)
 			end
 			[rgb_markers;rgb_image_multi_roi]
 		else
@@ -447,7 +442,7 @@ begin # fitting ROI's to image with several
 end
 
 # ╔═╡ f1512fc5-4a7a-4274-9d42-3057d9aec04f
-StatOnRois = ThermovisorImages.CentredObjCollectionStat(fitted_rois,nbins=Int(floor(patterns_number/12)))
+StatOnRois = ThermovisorImages.CentredObjCollectionStat(fitted_rois,nbins=Int(floor(patterns_number/5)))
 
 # ╔═╡ 2925fafa-4722-4335-ba49-77c6a8fb110b
 md"""
@@ -2792,7 +2787,7 @@ version = "1.8.1+0"
 # ╟─1467b184-22ac-4038-ad1b-f084d4443b27
 # ╟─c87a830a-f48a-4444-81bc-3efd69a130ad
 # ╠═768535e0-a514-4dff-ac8b-0d7ca126149c
-# ╟─5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
+# ╠═5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
 # ╟─6d37916c-7895-49d3-b8a3-c8661050ebcb
 # ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
 # ╟─c67290fc-6291-4f3e-a660-a3c4afa3a5e3
@@ -2815,13 +2810,13 @@ version = "1.8.1+0"
 # ╟─9c13d94e-ca2f-41d6-922a-428bb7a476c8
 # ╟─96ad6e27-52dd-41aa-b115-f852049a485a
 # ╟─0badf26a-38fa-45be-9704-d4e80b12a9cb
-# ╟─f8154558-d0cb-4b27-8c0d-b5cac07a099c
-# ╟─39e31290-e7b5-47ce-ac46-aebc33ddfa54
+# ╠═f8154558-d0cb-4b27-8c0d-b5cac07a099c
+# ╠═39e31290-e7b5-47ce-ac46-aebc33ddfa54
 # ╟─10954f10-9414-4839-872f-c2516d5d8e4e
 # ╟─6adfae4d-5137-4692-b9f3-3793c4c76202
-# ╟─f1512fc5-4a7a-4274-9d42-3057d9aec04f
-# ╟─2925fafa-4722-4335-ba49-77c6a8fb110b
-# ╟─e7e6884a-1145-4a01-a429-6c4a84e7ea33
+# ╠═f1512fc5-4a7a-4274-9d42-3057d9aec04f
+# ╠═2925fafa-4722-4335-ba49-77c6a8fb110b
+# ╠═e7e6884a-1145-4a01-a429-6c4a84e7ea33
 # ╟─68b33b39-5ef5-4560-b4b2-1fe2f43a3628
 # ╟─8a132aba-aa8a-428a-84a2-0ab6e5e2b891
 # ╟─821a7c95-f4da-410d-b780-111abb6d0db5

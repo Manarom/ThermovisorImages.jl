@@ -136,8 +136,8 @@ function filter_image!(imag::AbstractMatrix,external_region_flag::FlagMatrix)
 
 In-place filtering of [`RescaledImage`](@ref), filtered object is wrapped around the input RescaledImage
 """
-    function filter_image!(imag::RescaledImage{Float64},
-        external_region_flag::FlagMatrix)::FilteredImage
+    function filter_image!(imag::RescaledImage,
+        external_region_flag::FlagMatrix)
         
         external_region = view(imag.initial,external_region_flag)
         @. external_region=0.0

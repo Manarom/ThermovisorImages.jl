@@ -95,7 +95,7 @@ function radial_distribution_statistics(along_length_coordinate::AbstractVector,
         max_length=-1.0,min_length=-1.0)
             @assert(length(along_length_coordinate)==size(distrib,1),"Vector of coordinate should have the same length as the number of distrib rows")
             not_nan_flag = _inbounds_flag(along_length_coordinate,distrib,max_length,min_length)
-            L = @view along_length_coordinate[not_nan_flag]
+            L = along_length_coordinate[not_nan_flag]
             D = @view distrib[not_nan_flag,:]
             return DistributionStatistics(L,D)
 end

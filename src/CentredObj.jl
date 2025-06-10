@@ -331,7 +331,7 @@ end
 name(::CircleObj) = "Circle"
 parnumber(::Type{CircleObj}) = 3
 diameter(c::CircleObj) = c.dimensions[]
-perimeter(c::CircleObj) = 2*π*radius(c)^2
+perimeter(c::CircleObj) = 2*π*radius(c)
 radius(c::CircleObj) = c.dimensions[]/2
 side(c::CircleObj) = diameter(c)
 area(c::CircleObj) = π*radius(c)^2
@@ -751,11 +751,13 @@ function radial_distribution(imag::AbstractMatrix,c::CentredObj,
 
     extrapolation_bc = Interpolations.Line()
     #extrapolation_bc = Interpolations.Flat()
-    Threads.@threads for (i,α) in enumerate(angles_range) # circle over line rotation angle 
-            (along_line_length,distrib,) = along_mask_line_distribution(imag,c,α, line_length;length_per_pixel=length_per_pixel,use_wu=use_wu)
-            w_distr = @view radial_distrib_matrix[:,i]
-            along_line_distrib = LinearInterpolation(along_line_length,distrib,extrapolation_bc = extrapolation_bc)(first_columnn_along_line) 
-            copyto!(w_distr,along_line_distrib)
+    Threads.@sync for (i,α) in enumerate(angles_range) # circle over line rotation angle 
+            Threads.@spawn begin 
+                (along_line_length,distrib,) = along_mask_line_distribution(imag,c,α, line_length;length_per_pixel=length_per_pixel,use_wu=use_wu)
+                w_distr = @view radial_distrib_matrix[:,i]
+                along_line_distrib = LinearInterpolation(along_line_length,distrib,extrapolation_bc = extrapolation_bc)(first_columnn_along_line) 
+                copyto!(w_distr,along_line_distrib)
+            end
     end
     return (first_columnn_along_line,radial_distrib_matrix)
 end

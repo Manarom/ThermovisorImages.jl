@@ -79,7 +79,7 @@ function to_rgb(image::Matrix{Float64};
         return to_rgb(RescaledImage(image),color_scheme=color_scheme)
         #collect(colorview(RGB, permuteddimsview(rgbimg_3D,(3,1,2))) )
     end
-function to_rgb(image::RescaledImage{Float64},color_scheme::Symbol=:none) 
+function to_rgb(image::RescaledImage{Float64};color_scheme::Symbol=:none) 
     haskey(colorschemes,color_scheme) ? change_default_colorscheme(color_scheme) : nothing
     return get.(DefColorScheme,image.im)
 end
