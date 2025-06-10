@@ -188,6 +188,15 @@ roi = ThermovisorImages.fit_all_patterns(im)
     end
     y = copy(im1.initial)
     y_view = ThermovisorImages.c_view(y,roi[1])
-    t = @time ThermovisorImages.recalculate_with_new_emissivity!(y_view,0.5)
-    @show t
+    ThermovisorImages.recalculate_with_new_emissivity!(y_view,0.5,1.0,λ_left=14.0, λ_right=nothing) #single wavelength version
     simshow(y)
+    maximum(y)
+    y2 = copy(im1.initial)
+    y2_view = ThermovisorImages.c_view(y2,roi[1])
+    ThermovisorImages.recalculate_with_new_emissivity!(y2,roi[1],0.5,1.0,λ_left=14.0, λ_right=nothing)
+    maximum(im1.initial)
+    maximum(y2)
+
+    using BenchmarkTools
+
+    @benchmark ThermovisorImages.recalculate_with_new_emissivity!(y_view,0.5,1.0,λ_left=14.0, λ_right=nothing)

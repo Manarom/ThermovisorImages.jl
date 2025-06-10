@@ -1,6 +1,10 @@
 # this code should not be dependent on custom image types
+export CentredObj,CircleObj,SquareObj,RectangleObj,
+c_view,line_within_mask,along_line_distribution,
+within_mask_line_points_distribution,mean_within_mask,
+along_mask_line_distribution,radial_distribution
 """
-`CentredObj` is a sort of region of interest (ROI) marker object. 
+    `CentredObj` is a sort of region of interest (ROI) marker object with coordinates and dimentions. 
 
 `CentredObj` has centre coordinates and dimensions, object's center can be 
 anywhere with respect to the image indices. ROI also has one or more size parameters (in pixels)
@@ -39,14 +43,14 @@ fitting the image
 abstract type CentredObj end 
 
 """
-parnumber(::Type{T}) where T<:CentredObj
+    parnumber(::Type{T}) where T<:CentredObj
 
 Returns total number of parameters needed to create new object
 """
 function parnumber(::Type{T}) where T<:CentredObj    error(DomainError(T,"Undefined parnumber method")) end
 
 """
-(::Type{T})() where T<:CentredObj
+    (::Type{T})() where T<:CentredObj
 
 Empty object constructor
 """
@@ -121,6 +125,11 @@ function is_within_iterator(img::AbstractMatrix,c::CentredObj)
     return Iterators.filter(i->is_within(c,i),keys(img))
 end
 
+"""
+    c_view(img::AbstractMatrix,c::CentredObj)
+
+Returns the view of `img` elements which are within the `CentredObj`
+"""
 function c_view(img::AbstractMatrix,c::CentredObj)
     return @view img[cent_to_flag(c,size(img))]
 end
@@ -134,7 +143,7 @@ function Base.getindex(img::AbstractMatrix,c::CentredObj)
     return map(i->getindex(img,i),is_within_iterator(img,c))
 end
 """
-Base.setindex!(img::Matrix,x::Array,c::CentredObj)
+    Base.setindex!(img::Matrix,x::Array,c::CentredObj)
 
 img[c]=x assignes all x elements to the elements of `img` with indices lying within the `CentredObj` c
 """
@@ -146,7 +155,7 @@ function Base.setindex!(img::Matrix,x::Array,c::CentredObj)
     return nothing
 end
 """
-Base.setindex!(img::Matrix{T},x::Number,c::CentredObj) where T
+    Base.setindex!(img::Matrix{T},x::Number,c::CentredObj) where T
 
 Setting all elements within the `CentredObj` to a single value
 """
@@ -169,7 +178,7 @@ function shift!(c::T,ind::CartesianIndex{2}) where T<:CentredObj
     return nothing
 end
 """
-cent_to_flag(c::CentredObj,sz::Tuple{Int,Int};external=false)
+    cent_to_flag(c::CentredObj,sz::Tuple{Int,Int};external=false)
 
 Converts CentredObj to bitmatrix  of size sz
 """
@@ -179,7 +188,7 @@ function cent_to_flag(c::T,sz::Tuple{Int,Int};external=false) where T<:CentredOb
 end
 
 """
-cent_to_flag(::Type{T},c::CentredObj,sz::Tuple{Int,Int};external=false) where T<:FlagMatrix
+    cent_to_flag(::Type{T},c::CentredObj,sz::Tuple{Int,Int};external=false) where T<:FlagMatrix
 
 Converts centred obj to BitMatrix or the Matrix of bool see `FlagMatrix
 """
@@ -188,7 +197,7 @@ function cent_to_flag(::Type{T},c::CentredObj,sz::Tuple{Int,Int};external=false)
     return external ? fill_im_external!(external_part_flag,c) : fill_im!(external_part_flag,c)
 end
 """
-line_within_mask(c::CentredObj,ang::Float64,line_length::Int)
+    line_within_mask(c::CentredObj,ang::Float64,line_length::Int)
 
 Function returns endpoint of the line lying fully within the mask  - tuple of four point which can be 
 directly splatted to the along_line_distribution
@@ -199,7 +208,7 @@ line_length - the length of line
 """
 function line_within_mask(c::CentredObj,::Float64,::Int)  DomainError(typeof(c),"no implementation") end
 """
-area(c::CentredObj)
+    area(c::CentredObj)
 
 Ealuates the surface area in pixels
 """
@@ -217,14 +226,14 @@ Fills the optimization starting vector by seraching the centre of the image `im_
 """
 function fill_x0!(x0,im_bin::FlagMatrix,c::CentredObj) DomainError(typeof(c),"no implementation") end
 """
-convert_to_drawable(::CentredObj)
+    convert_to_drawable(::CentredObj)
 
 Converts CentredObj to a drawable structure appropriate to the `ImageDraw`
 draw function, polygon,ellipse see [`ImageDraw.draw`] function 
 """
 function convert_to_drawable(::CentredObj) end
 """
-fill_im!(img,c::CentredObj)
+    fill_im!(img,c::CentredObj)
 
 Fills bitmatrix `img` in a way that all pixels which are 
 within the `CentredObj` are true and false otherwise.  
@@ -237,7 +246,7 @@ function fill_im!(img,c::CentredObj)
     return img
 end
 """
-fill_vect!(x::AbstractVector, c::CentredObj)
+    fill_vect!(x::AbstractVector, c::CentredObj)
 
 Converts `CentredObj` to vector
 """
@@ -248,7 +257,7 @@ function fill_vect!(x::AbstractVector, c::CentredObj)
 end
 
 """
-image_fill_discr(image::AbstractMatrix,c::CentredObj)
+    image_fill_discr(image::AbstractMatrix,c::CentredObj)
 
 Function returns the function to evaluate the discrepancy  between 
 `CentredObj` and the matrix, this function is used during the fitting procedure 
@@ -258,7 +267,7 @@ function image_fill_discr(image::AbstractMatrix,c::CentredObj)
      return x-> image_discr(image, fill_im!(im_copy,fill_from_vect!(c,x)))
 end
 """
-dimensions(c::CentredObj)
+    dimensions(c::CentredObj)
 
 Return dimensional parameters (vector)
 """
@@ -283,7 +292,7 @@ Base.:/(c::CentredObj,a::Number) = begin
     return c_copy
 end
 """
-obj_from_vect(::Type{CentredObj},v::AbstractVector)
+    obj_from_vect(::Type{CentredObj},v::AbstractVector)
 
 Creates object from parameters vector, first two arguments are center
 point other are dimensions [center[1],center[2],dimensions[1],...]
@@ -295,7 +304,7 @@ function obj_from_vect(::Type{T},v::AbstractVector) where T<:CentredObj
 end
 
 """
-fill_from_vect!(c::CentredObj, v::AbstractVector)
+    fill_from_vect!(c::CentredObj, v::AbstractVector)
 
 Fills CentreObj parameters from the vector [center_index_1,center_index_2,dimension_1,dimension_2,...]
 """
@@ -308,7 +317,7 @@ function fill_from_vect!(c::CentredObj, v::AbstractVector)
 end
 #-------------------------CIRCLE-OBJ---------------------------
 """
-Circle object with defined diemeter
+    Circle object with defined diameter
 """
 mutable struct CircleObj <:CentredObj
     center::MVector{2,Int} # central point location (indices)
@@ -329,7 +338,7 @@ area(c::CircleObj) = π*radius(c)^2
 is_within(c::CircleObj,inds::AbstractVector) = sqrt(sum(abs2  , c.center .- inds)) < radius(c)
 
 """
-fill_x0!(x0,im_bin::FlagMatrix,::CircleObj)
+    fill_x0!(x0,im_bin::FlagMatrix,::CircleObj)
 
 Fills starting vector for the optimization of `CentredObj`
 """
@@ -345,7 +354,7 @@ function fill_x0!(x0,im_bin::FlagMatrix,::CircleObj)
         #x0 .= [collect(x/2 for x in Tuple.(max_ind + min_ind))..., starting_diameter]
 end    
 """
-line_within_mask(c::CircleObj,ang,line_length)
+    line_within_mask(c::CircleObj,ang,line_length)
 
 Returns two endpoints of the line lying totally inside the `CentredObj`
 """
@@ -369,7 +378,7 @@ function convert_to_drawable(c::CircleObj;fill=false,thickness::Int=-1)
 end
 #-----------------------SQUARE-OBJ---------------------------
 """
-Square with defined center and side
+    Square with defined center and side
 """
 mutable struct SquareObj <:CentredObj
     center::MVector{2,Int}
@@ -428,7 +437,7 @@ function line_within_mask(c::SquareObj,ang,line_length)
                    c.center[2]+ lsin ]
 end
 """
-diagonal_points(c::Union{SquareObj,CircleObj})
+    diagonal_points(c::Union{SquareObj,CircleObj})
 
 Returns diagonal points in row-column coordinates
 """
@@ -438,7 +447,7 @@ diagonal_points(c::Union{SquareObj,CircleObj}) = begin
     return (c.center[1]-a , c.center[2]-a, c.center[1]+a , c.center[2]+a)
 end
 """
-rearranged_diagonal(c::Union{SquareObj,CircleObj})
+    rearranged_diagonal(c::Union{SquareObj,CircleObj})
 
 Returns diagonal points in x-y coordinates
 """
@@ -450,7 +459,7 @@ end
 #--------------------------RECTANGLE-OBJ-----------------------
 
 """
-Rectangular object with defined two sides
+    Rectangular object with defined two sides
 """
 mutable struct RectangleObj <:CentredObj
 
@@ -534,7 +543,7 @@ function line_within_mask(c::RectangleObj,ang,line_length)
                    c.center[2]+ lsin ]
 end
 """
-along_line_distribution(img::AbstractMatrix{T},x0,y0,x1,y1) where T
+    along_line_distribution(img::AbstractMatrix{T},x0,y0,x1,y1) where T
 
 Function evaluates matrix values distribution along the line specified by two coordinates, 
 img - input image 
@@ -575,7 +584,7 @@ end
 
 
 """
-mean_within_mask(img::AbstractMatrix,c::CentredObj)
+    mean_within_mask(img::AbstractMatrix,c::CentredObj)
 
 Evaluates the average temperature of all points within the `CentredObj` marker
 """
@@ -586,7 +595,7 @@ end
 
 
 """
-add_distrib_point!(points,distrib,point,value)
+    add_distrib_point!(points,distrib,point,value)
 
 Internal fucntion to add the point to distribution
 """
@@ -595,7 +604,7 @@ add_distrib_point!(points,distrib,point,value) = begin
     Base.push!(distrib,value)       
 end
 """
-along_line_distribution_xiaolin_wu(img::AbstractMatrix{T}, y0, x0, y1, x1) where T
+    along_line_distribution_xiaolin_wu(img::AbstractMatrix{T}, y0, x0, y1, x1) where T
 
 Evaluates the value matrix content along the line with endpoint coordinates x0,y0,y1,x1,
 returns indices of all points. As far as Wu's algorithm returns two adjacent points
@@ -671,7 +680,7 @@ function along_line_distribution_xiaolin_wu(img::AbstractMatrix{T}, y0, x0, y1, 
     fpart(pixel::T) where {T} = pixel - T(trunc(pixel))
     rfpart(pixel::T) where {T} = oneunit(T) - fpart(pixel)
 """
-within_mask_line_points_distribution(imag::AbstractMatrix,c::CentredObj,direction_angle=0.0,line_length=10.0;use_wu::Bool=false)
+    within_mask_line_points_distribution(imag::AbstractMatrix,c::CentredObj,direction_angle=0.0,line_length=10.0;use_wu::Bool=false)
 
 Function evaluates the distribution of values in `imag` matrix along the line with length `line_length` in pixels
 oriented with the angle `direction_angle` in degrees  with respect to the posistive direction of oX (column index increase), 
@@ -700,7 +709,7 @@ function within_mask_line_points_distribution(imag::AbstractMatrix,c::CentredObj
     return (points,distrib,line_points)
 end
 """
-along_mask_line_distribution(imag::AbstractMatrix,c::CentredObj,direction_angle=0.0,line_length=10.0;
+    along_mask_line_distribution(imag::AbstractMatrix,c::CentredObj,direction_angle=0.0,line_length=10.0;
                                                                                             length_per_pixel=1.0,
                                                                                             use_wu::Bool=false)
 
@@ -723,7 +732,7 @@ function along_mask_line_distribution(imag::AbstractMatrix,c::CentredObj,
     return (along_line_length,distrib,line_points)
 end
 """
-radial_distribution(imag::AbstractMatrix,c::CentredObj,angles_range::AbstractRange,line_length;mm_per_pixel=1.0)
+    radial_distribution(imag::AbstractMatrix,c::CentredObj,angles_range::AbstractRange,line_length;mm_per_pixel=1.0)
 
 Calls `along_mask_line_distribution` on lines oriented with some angles range and puts the resulting 
 distribution into one matrix j'th column of this matrix corresponds to the distribution along the line oriented with ang[j] angle
@@ -742,13 +751,11 @@ function radial_distribution(imag::AbstractMatrix,c::CentredObj,
 
     extrapolation_bc = Interpolations.Line()
     #extrapolation_bc = Interpolations.Flat()
-    Threads.@sync for (i,α) in enumerate(angles_range) # circle over line rotation angle 
-        Threads.@spawn begin 
+    Threads.@threads for (i,α) in enumerate(angles_range) # circle over line rotation angle 
             (along_line_length,distrib,) = along_mask_line_distribution(imag,c,α, line_length;length_per_pixel=length_per_pixel,use_wu=use_wu)
             w_distr = @view radial_distrib_matrix[:,i]
             along_line_distrib = LinearInterpolation(along_line_length,distrib,extrapolation_bc = extrapolation_bc)(first_columnn_along_line) 
             copyto!(w_distr,along_line_distrib)
-        end
     end
     return (first_columnn_along_line,radial_distrib_matrix)
 end

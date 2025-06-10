@@ -1,11 +1,21 @@
 
+export MarkeredImage,m_view,sort_reduce!,sort_markers!,marker_image
 """
-Special type to work with segmentated image 
+    Special type to work with segmentated image, stored the matrix of indices and a vector of vectors of 
+patterns coordinates. Pattern can be sorted by area. And accessed by direct indexing into the `MarkeredImage`
+object.
+
 """
 struct MarkeredImage
     markers::Matrix{Int} # this stores the matrix of markers
     ViewsVect::Vector{Vector{CartesianIndex{2}}} # stores a vector of indices per each pattern
-    MarkeredImage(markers::Matrix{Int}) = begin
+    """
+    MarkeredImage(markers::Matrix{Int})
+
+Creates `MarkeredImage` from matrix of labeles (each element of `markers` has the integer value
+corresponding to it's pattern index)
+"""
+MarkeredImage(markers::Matrix{Int}) = begin
         flag = similar(markers,Bool)
         max_label = maximum(markers)
         if max_label<1
@@ -22,14 +32,14 @@ struct MarkeredImage
     end
 end
 """
-Base.length(m::MarkeredImage)
+    Base.length(m::MarkeredImage)
 
 Return the total number of patterns in the markerred image [`MarkeredImage`](@ref)
 """
 Base.length(m::MarkeredImage) = length(m.ViewsVect)
 
 """
-Base.size(m::MarkeredImage)
+    Base.size(m::MarkeredImage)
 
 The image size in pixels
 """
@@ -39,11 +49,27 @@ Base.size(m::MarkeredImage) = size(m.markers)
 Base.lastindex(m::MarkeredImage) = length(m)
 Base.getindex(m::MarkeredImage,i) = m.markers[m.ViewsVect[i]]
 Base.setindex!(m::MarkeredImage,val::Int,i::Int) = fill!(m_view(m,i),val)
-m_view(m::MarkeredImage,i::Int) = view(m.markers,m.ViewsVect[i])
-
 
 """
-areas(m::MarkeredImage)
+    m_view(m::MarkeredImage,i::Int)
+
+Returns the view of specified marker in m.markers
+"""
+m_view(m::MarkeredImage,i::Int) = view(m.markers,m.ViewsVect[i])
+
+"""
+    m_view(im::AbstractMatrix,m::MarkeredImage,i::Int)
+
+Returns the view of matrix `im` at points corresponding to the 
+`i` th pattern of `MarkeredImage` image `m` 
+"""
+function m_view(im::AbstractMatrix,m::MarkeredImage,i::Int)
+    @assert size(im)==size(m) "Matrices `im` and `m` must be of the same size"
+    return view(im,m.ViewsVect[i])
+end
+
+"""
+    areas(m::MarkeredImage)
 
 Vector of patterns areas (number of pixels within the pattern)
 """
@@ -51,16 +77,17 @@ areas(m::MarkeredImage) = map(length, m.ViewsVect)
 
 pattern_diagonal(m::MarkeredImage,i::Int) = extrema(m.ViewsVect[i])
 """
-flag(m::MarkeredImage,i::Int)
+    flag(m::MarkeredImage,i::Int)
 
-
+Creates bitmatrix with the same size as the whole markers matrx with trues on the 
+location of i'th pattern
 """
 function flag(m::MarkeredImage,i::Int)
     fl = BitMatrix(undef,size(m.markers))
     return flag!(fl,m,i)
 end
 """
-external_flag(m::MarkeredImage,i::Int)
+    external_flag(m::MarkeredImage,i::Int)
 
 Inversed version of [`flag`](@ref)
 """
@@ -69,7 +96,7 @@ function external_flag(m::MarkeredImage,i::Int)
     return flag!(fl,m,i,negate=true)
 end
 """
-flag!(fl::FlagMatrix,m::MarkeredImage,i::Int;negate::Bool=false)
+    flag!(fl::FlagMatrix,m::MarkeredImage,i::Int;negate::Bool=false)
 
 Fills the fl matrix (Bitmatrix or Matrix{Bool}) with the same size 
 as the entire image with all elements set to zero, except the pixels of `i`'th pattern
@@ -81,7 +108,7 @@ function flag!(fl::FlagMatrix,m::MarkeredImage,i::Int;negate::Bool=false)
         return fl
 end
 """
-reduced_flag(m::MarkeredImage,i::Int)
+    reduced_flag(m::MarkeredImage,i::Int)
 
 returns flag matrix shrinked to the size of the pattern
 """
@@ -98,14 +125,14 @@ function shrinked_flag(m::MarkeredImage,i::Int)
 end
 
 """
-sort_reduce!(m::MarkeredImage;total_number::Int = -1,descending::Bool=true)
+    sort_reduce!(m::MarkeredImage;total_number::Int = -1,descending::Bool=true)
 
 Sorts markers by total area and reduces the total number of patterns if the maximum label
 is less then `total_number` value
 
 Input arguments:
 m - [`MarkeredImage`](@ref)
-total_number - number of 
+total_number - number of patterns retained in the image
 """
 function sort_reduce!(m::MarkeredImage;total_number::Int = -1,descending::Bool=true)
         max_label = length(m)
@@ -129,6 +156,11 @@ function sort_reduce!(m::MarkeredImage;total_number::Int = -1,descending::Bool=t
         end
     return m
 end
+"""
+    sort_markers!(m::MarkeredImage,descending::Bool=true)
+
+Sorts markers, see [`sort_reduce!`](@ref)
+"""
 sort_markers!(m::MarkeredImage,descending::Bool=true) = sort_reduce!(m,total_number=-1,descending=descending)
 
 """
@@ -143,12 +175,11 @@ end
 """
     marker_image(rescaled::RescaledImage,level_threshold::Float64,distance_threshold::Float64=1e-3)
 
-    Markers image patterns, input umage is `RescaledImage` image type, 
-    level_threshold  - should be between 0.0 and 1.0
-    distance_threshold  - criterium of image binarization after distance transform
+Markers image patterns, input umage is of `RescaledImage` image type, 
+level_threshold  - should be between 0.0 and 1.0
+distance_threshold  - criterium of image binarization after distance transform, should be less than 1
 
-    returns `markers`  - matrix of Int's with the same size as the input matrix, each element 
-    of `markers` is the label index of individual patterns of the initial image
+returns [`MarkeredImage`](@ref) object
 """
 function marker_image(rescaled::RescaledImage;
             level_threshold::Float64=-1.0,
@@ -170,7 +201,7 @@ function marker_image(rescaled::RescaledImage;
 end
 
 """
-        `filter_image(imag::RescaledImage,markers;label=0)`
+    filter_image(imag::RescaledImage,markers;label=0)
 
 Funtion zeroes all pixels of the image, except those belonging to the specified pattern.
 `image` - rescaled image (see [`RescaledImage`](@ref) type)

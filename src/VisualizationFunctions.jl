@@ -1,3 +1,7 @@
+export draw!,draw,to_rgb,draw_line_within_mask,
+draw_line_within_mask!,change_default_colorscheme,
+change_default_roi_color
+import ImageDraw
 """
     draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=-1,
                                         roi_color::RGB{Float64}=DefRoiColor[], 
@@ -29,7 +33,7 @@ function draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=-1
             roi_color=roi_color, show_cross=show_cross,kwargs...)   
     end
     draw(image::Matrix{Float64};color_scheme::Symbol=:none) = to_rgb(image,color_scheme=color_scheme)
-    draw(image::RescaledImage;color_scheme::Symbol=:none) = draw(image.initial,color_scheme=color_scheme)
+    draw(image::RescaledImage;color_scheme::Symbol=:none) = draw(image.im,color_scheme=color_scheme)
     draw(image::FilteredImage;color_scheme::Symbol=:none,draw_reduced::Bool=false) = draw_reduced ? draw(reduced_image(image),color_scheme=color_scheme) : draw(image.full,color_scheme=color_scheme) 
     draw(image::RescaledImage,c::CentredObj) = begin
         im_rgb = to_rgb(image)
@@ -44,12 +48,12 @@ function draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=-1
         return im_rgb
     end
     function draw!(rgbim::Matrix{RGB{Float64}},
-        c::CentredObj;
-        fill=false,
-        thickness::Int=55,
-        roi_color::RGB{Float64}=DefRoiColor[],
-        show_cross::Bool=true,
-        kwargs...) 
+                    c::CentredObj;
+                    fill=false,
+                    thickness::Int=55,
+                    roi_color::RGB{Float64}=DefRoiColor[],
+                    show_cross::Bool=true,
+                    kwargs...) 
 
         ImageDraw.draw!(rgbim,convert_to_drawable(c,fill=fill,thickness=thickness), roi_color; kwargs...)
         
@@ -66,19 +70,19 @@ function draw!(image::Matrix{Float64},c::CentredObj;fill=false,thickness::Int=-1
     """
     to_rgb(image::Matrix{Float64};color_scheme::String="")
 
-Converts matrix to rgb martix by applyting the color scheme 
-using `applycolourmap` function from `PerceptualColourMaps`  
+Converts matrix to rgb - martix by applyting the color scheme 
+from `ColorSchemes` package. 
 """
 function to_rgb(image::Matrix{Float64};
                 color_scheme::Symbol=:none)
-        haskey(colorschemes,color_scheme) ? change_default_colorscheme(color_scheme) : nothing
-        # PerceptualColourMaps version was removed
-        #rgbimg_3D = applycolourmap(image,PerceptualColourMaps.cmap(color_scheme))
-        return get.(DefColorScheme,image)
+
+        return to_rgb(RescaledImage(image),color_scheme=color_scheme)
         #collect(colorview(RGB, permuteddimsview(rgbimg_3D,(3,1,2))) )
     end
-to_rgb(image::RescaledImage{Float64};
-        color_scheme::Symbol=:none) = to_rgb(image.initial,color_scheme=color_scheme)
+function to_rgb(image::RescaledImage{Float64},color_scheme::Symbol=:none) 
+    haskey(colorschemes,color_scheme) ? change_default_colorscheme(color_scheme) : nothing
+    return get.(DefColorScheme,image.im)
+end
     """
     draw(c::CentredObj;kwargs...)
 
@@ -90,13 +94,22 @@ function draw(c::CentredObj;kwargs...)
         image[1,1] = 0.001            
         return draw!(image,c;kwargs...)
 end
+"""
+    draw_line_within_mask(image::Matrix{Float64},c::CentredObj,
+                    ang,length;thickness::Int=55,
+                    roi_color::RGB{Float64}=DefRoiColor[], 
+                    color_scheme::Symbol=:none,kwargs...)
+
+Draws straight line on the `image` converted to RGB, all points are
+located within the `CentredObj`. This line goes through the centre of `c`
+and oriented with the angle `ang` in degrees with positive direction  - counterclockwise.
+
+"""
 function draw_line_within_mask(image::Matrix{Float64},c::CentredObj,
                     ang,length;thickness::Int=55,
                     roi_color::RGB{Float64}=DefRoiColor[], 
                     color_scheme::Symbol=:none,kwargs...) 
-
-    rgbim = to_rgb(image,color_scheme=color_scheme)
-    return draw_line_within_mask!(rgbim,c,ang,length;thickness=thickness,
+    return draw_line_within_mask!(to_rgb(image,color_scheme=color_scheme),c,ang,length;thickness=thickness,
                                 roi_color=roi_color, kwargs...)
 end
 function draw_line_within_mask!(rgbim::Matrix{T},
@@ -110,11 +123,21 @@ function draw_line_within_mask!(rgbim::Matrix{T},
         return rgbim
 end
  
+"""
+    change_default_colorscheme(new_scheme::Symbol)
+
+Change colorschee which is used by default to convert matrices to rgb images
+"""
 function change_default_colorscheme(new_scheme::Symbol)
     @assert haskey(colorschemes,new_scheme) "This colorscheme is not supported see keys(ColorSchemes.colorscheme)"
     DefColorScheme[] = colorschemes[new_scheme]
 end
 
+"""
+    change_default_roi_color(color::RGB{Float64})
+
+Changes default color to visualize the `CentredObj`
+"""
 function change_default_roi_color(color::RGB{Float64})
     DefRoiColor[] = color
 end

@@ -1,3 +1,3 @@
 /Manifest*.toml
-#/test/debug_script.jl
+/test/debug_script.jl
 /thermal images/temp

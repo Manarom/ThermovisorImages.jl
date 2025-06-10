@@ -1,10 +1,10 @@
-# ThermovisorData
+# ThermovisorImages
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://manarom.github.io/ThermovisorData.jl)
 [![Build Status](https://github.com/Manarom/ThermovisorData.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/Manarom/ThermovisorData.jl/actions/workflows/CI.yml?query=branch%3Amaster)
 
 
 
-**ThervisorData.jl** is a small package designed to process static thermal images stored as matrices. Each matrix element represents a temperature value. Package enables users to load images from csv-files, calculate temperature distributions, and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circless, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
+**ThervisorImages.jl** is a small package designed to process static thermal images stored as matrices. Each matrix element represents a temperature value. Package enables users to load images from csv-files, calculate temperature distributions, and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circless, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
 
 Initial image and filtered image with ROI, temperature distribution is evaluated along the inclined line
 <p float="left">
@@ -24,14 +24,21 @@ The following figures show (left) the initial image with several separate patter
   <img src="./assets/multiple_patterns_fitted.png" width="220"/> 
 </p>
 
- Detailed explanation of this images is given in  `/notebook` folder in [Pluto](https://plutojl.org/) notebook, which can be used as an example of package usage.
+ Detailed explanation of this images is given in  [notebook] folder in [Pluto](https://plutojl.org/) notebook, which can be used as an example of package usage.
 
 
   Full documentation is available at  [documentation](https://manarom.github.io/ThermovisorData.jl/)
 
-# Installation 
+## Quick start
 
-1) Download [Julia](https://julialang.org/downloads)
+```julia
+import Pkg 
+Pkg.add("https://github.com/Manarom/ThermovisorImages.jl.git")
+using ThermovisorImages
+im = read_jdx_file(file_name) # to read the file, data.x - x-values, data.y - y values
+write_jdx_file(x,y,"MKM","TRANSMITTANCE") # to write x- and y- data vectors
+
+```
 
 #### For usage
 

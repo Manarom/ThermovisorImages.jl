@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.9
+# v0.20.6
 
 using Markdown
 using InteractiveUtils
@@ -17,15 +17,16 @@ macro bind(def, element)
 end
 
 # ╔═╡ 051044c5-760c-4b60-90fc-82a347c3b6bc
-using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO,Optim,CSV,Colors,ColorVectorSpace,Distributions,PerceptualColourMaps,StaticArrays,Interpolations,FileTypes,ImageDraw,StatsBase
+using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO,Optim,CSV,Colors,ColorVectorSpace,Distributions,ColorSchemes,StaticArrays,Interpolations,FileTypes,ImageDraw,StatsBase,PlanckFunctions
 
 # ╔═╡ 4460f260-f65f-446d-802c-f2197f4d6b27
 md"""
 ### This notebook demostrates main features of `ThermovisorImages.jl` package
 #
-**ThermovisorImages.jl** is a small package designed to process static thermal images stored as matrices in csv-files or as images. For csv data each matrix element represents a temperature value. `ThermovisorImages.jl` enables users to load images from csv files, calculate temperature distributions and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (regions that stand out from the background).
-Package uses `Image.jl` package to label image features and `Optim.jl` package to fit the ROIs to this features. After fitting the temperature distribution 
-The image can also be filtered to remove all other patterns from the image except the one with selected mark.
+**ThermovisorImages.jl** is a small package designed to process static thermal images stored as matrices in csv-files or as images. For csv data each matrix element represents a temperature value. `ThermovisorImages.jl` enables users to load images from csv files, calculate temperature distributions and compute statistical analyses for temperatures. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (regions that stand out from the background).
+Package uses `Image.jl` package to label image features and `Optim.jl` package to fit the ROIs to this features. After fitting ROIs temperature distribution along specified lines and averaged radial and angular temperature distribution of points within each ROI can be calculated.
+
+**ThermovisorImages.jl**  also provides functions to recalculate the temperature distribution of the whole image (or it's part within the ROI or labeled pattern) assuming different emissivity of the measured surface. 
 
 This package was designed to study the temperature distribution across the heated sample for the emissivity measuring facility described in this [`paper`](https://link.springer.com/article/10.1007/s00340-024-08331-9)
 
@@ -41,6 +42,8 @@ md"""
 *  4. Fitting marker position and size to the pattern
 *  5. Evaluating radial and angular temperature distributions
 *  6. Fitting multiple ROI objects to the image with several temperature features
+*  7. Calculating statistics on several pattern spatial properties
+*  8. Recalculating the temperature distribution for different emissivity of the surface
 """
 
 # ╔═╡ fc6af4b0-1127-11f0-1b66-a59d87c5b141
@@ -56,9 +59,9 @@ end;
 
 # ╔═╡ f6c1be87-94d2-4b08-a52d-6eb637192ee8
 begin 
-	includet(joinpath(sources_path,"ThermovisorData.jl"))
+	includet(joinpath(sources_path,"ThermovisorImages.jl"))
 # include(joinpath(sources_path,"ThermovisorData.jl")) #replace includet with include if Revise is not needed
-	using Main.ThermovisorData
+	using Main.ThermovisorImages
 end
 
 # ╔═╡ 4f93b7ba-3488-446d-8043-718fbdc5b808
@@ -94,7 +97,7 @@ md"""Set the temperature of file to be loaded $(@bind add_file_temperature Pluto
 
 # ╔═╡ dd4a9e93-0d4e-497a-8ca4-0e8f36205ffb
 begin 
-	files_in_dir = ThermovisorData.find_temperature_files(images_folder)
+	files_in_dir = ThermovisorImages.find_temperature_files(images_folder)
 	if add_file
 		add_file_fullname = Gtk.open_dialog("select file")
 		add_file_name = splitpath(add_file_fullname)[end]
@@ -110,8 +113,11 @@ end
 # ╔═╡ 794ebd5e-e9e0-4772-98a9-43e20c7ef4da
 #reading selected file
 begin 
-	rescaled_image = ThermovisorData.read_temperature_file(files_in_dir[temp_to_load][2])
+	rescaled_image = read_temperature_file(files_in_dir[temp_to_load][2])
 end;
+
+# ╔═╡ 22f19212-0b35-4bfe-b13a-590b9065c509
+rescaled_image
 
 # ╔═╡ 429cf33f-4422-44f0-beb8-5a1908a72273
 md"""
@@ -139,16 +145,25 @@ begin
 	if test_mask_type==RectangleObj
 		append!(test_coord_vect,test_side_b)
 	end
-	test_centre_obj = ThermovisorData.obj_from_vect(test_mask_type,test_coord_vect)
-	is_make_obj_selfy ? centre_obj_image = ThermovisorData.draw(test_centre_obj,thickness=25) : nothing
+	test_centre_obj = ThermovisorImages.obj_from_vect(test_mask_type,test_coord_vect)
+	is_make_obj_selfy ? centre_obj_image = ThermovisorImages.draw(test_centre_obj,thickness=25) : nothing
 	
-	rgb_image_initial = ThermovisorData.draw!(rescaled_image.initial,color_scheme="HEAT",test_centre_obj,show_cross = true)
-			imag_initial_show = ThermovisorData.draw_line_within_mask!(rgb_image_initial,test_centre_obj,0,10,color_scheme="R1")
+	rgb_image_initial = ThermovisorImages.draw!(rescaled_image.im,test_centre_obj,show_cross = true)
+	imag_initial_show = ThermovisorImages.draw_line_within_mask!(rgb_image_initial,test_centre_obj,0,10)
 	
 end
 
+# ╔═╡ 13f01881-2645-429b-9856-6c3f19c0ad48
+md"""
+The following block evaluates the average and standart deviation of temperature within the ROI 
+
+Average temperature within the marker <T>=$(ThermovisorImages.mean_within_mask(rescaled_image.initial,test_centre_obj)) 
+
+Standat deviation of average std(T) = $(ThermovisorImages.std_within_mask(rescaled_image.initial,test_centre_obj))
+"""
+
 # ╔═╡ 48c53ed9-127d-4e8e-bd29-416292057bff
-ThermovisorData.convert_to_drawable(test_centre_obj)
+ThermovisorImages.convert_to_drawable(test_centre_obj)
 
 # ╔═╡ 9f55febb-b047-4b22-8575-209d45354d51
 md" Export image to file $(@bind save_image CheckBox(default = false))"
@@ -159,15 +174,6 @@ begin
 		FileIO.save(joinpath(image_save_folder,"initial_image.png"), rgb_image_initial)
 	end
 end
-
-# ╔═╡ 13f01881-2645-429b-9856-6c3f19c0ad48
-md"""
-The following block evaluates the average and standart deviation of temperature within the ROI 
-
-Average temperature within the marker <T>=$(ThermovisorData.mean_within_mask(rescaled_image.initial,test_centre_obj)) 
-
-Standat deviation of average std(T) = $(ThermovisorData.std_within_mask(rescaled_image.initial,test_centre_obj))
-"""
 
 # ╔═╡ 5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
 md"""
@@ -203,12 +209,11 @@ begin
 	if filter_init_image
 		# filtering the image
 		if filter_by_option=="CentredObj"
-			filtered_by_obj = ThermovisorData.filter_image(rescaled_image,test_centre_obj)
+			filtered_by_obj = ThermovisorImages.filter_image(rescaled_image,test_centre_obj)
 		else
-			
-			filtered_by_obj = ThermovisorData.filter_image(rescaled_image)
+			filtered_by_obj = ThermovisorImages.filter_image(rescaled_image)
 		end
-		h2 = ThermovisorData.draw(filtered_by_obj,draw_reduced=is_show_filtered_reduced) 
+		h2 = ThermovisorImages.draw(filtered_by_obj,draw_reduced=is_show_filtered_reduced) 
 	end
 end
 
@@ -259,7 +264,7 @@ begin
 	if mask_type==RectangleObj
 		append!(coord_vect,side_b)
 	end
-	centre_obj = ThermovisorData.obj_from_vect(mask_type,coord_vect)
+	centre_obj = ThermovisorImages.obj_from_vect(mask_type,coord_vect)
 	#is_make_obj_selfy ? centre_obj_image = draw(centre_obj,thickness=25) : nothing
 end
 
@@ -268,16 +273,16 @@ end
 begin 
 
 	filtered_by_markers = filter_image(rescaled_image,marker_image(rescaled_image))
-	fitted_obj = ThermovisorData.copyobj(centre_obj)	
+	fitted_obj = ThermovisorImages.copyobj(centre_obj)	
 	if image_type=="filtered"
-		image_to_show = ThermovisorData.reduced_image(filtered_by_markers)
+		image_to_show = ThermovisorImages.reduced_image(filtered_by_markers)
 	elseif image_type =="not filtered"
-		image_to_show = rescaled_image.initial
+		image_to_show = rescaled_image.im
 	else # full filtered
-		image_to_show = filtered_by_markers.full.initial
+		image_to_show = filtered_by_markers.full.im
 	end
 	if is_fit_mask 
-		fit_centred_obj!(fitted_obj,filtered_by_markers,fit_reduced = image_type=="filtered") 
+		fit_centred_obj!(fitted_obj,filtered_by_markers, image_type=="filtered") 
 		@show fitted_obj
 		mm_per_pixel[]=sqrt((0.25π*25^2)/area(fitted_obj))
 	else
@@ -298,17 +303,17 @@ The upper figure shows the ROI and the inclined line which goes through its cent
 
 # ╔═╡ 42a7b186-aa04-4249-a129-bf925f181008
 begin
-	rgb_image = ThermovisorData.draw!(image_to_show,color_scheme="HEAT",fitted_obj,show_cross = true)
-	imag = ThermovisorData.draw_line_within_mask!(rgb_image,fitted_obj,direction_angle,line_length/mm_per_pixel[],color_scheme="R1")
+	rgb_image = ThermovisorImages.draw!(image_to_show,fitted_obj,show_cross = true)
+	imag = ThermovisorImages.draw_line_within_mask!(rgb_image,fitted_obj,direction_angle,line_length/mm_per_pixel[],color_scheme="R1")
 end
 
 # ╔═╡ b096c4f2-9dce-409d-874a-a851f577bf92
 begin 
 	#ThermovisorData.diag_ang(fitted_obj)
-	(along_line_length,distrib,line_points) = ThermovisorData.along_mask_line_distribution(image_to_show,fitted_obj,direction_angle,line_length,use_wu=is_use_wu,length_per_pixel=mm_per_pixel[])
+	(along_line_length,distrib,line_points) = ThermovisorImages.along_mask_line_distribution(image_to_show,fitted_obj,direction_angle,line_length,use_wu=is_use_wu,length_per_pixel=mm_per_pixel[])
 	#@show length(points)
 	
-	pl_distrib=ThermovisorData.plot_along_line_distribution(along_line_length,distrib,is_centered = true)
+	pl_distrib=ThermovisorImages.plot_along_line_distribution(along_line_length,distrib,is_centered = true)
 	#pl_distrib
 end
 
@@ -324,12 +329,12 @@ begin
 	if is_rad_distr_eval
 		new_line =line_length# minimum(side(fitted_obj))-5
 		ang_range = 0.0:1:60 # range of angles 
-		R,D = ThermovisorData.radial_distribution(image_to_show,fitted_obj,ang_range,line_length=new_line,length_per_pixel=mm_per_pixel[])
+		R,D = ThermovisorImages.radial_distribution(image_to_show,fitted_obj,ang_range,line_length=new_line,length_per_pixel=mm_per_pixel[])
 
-		(L,meanD,stdD,l_b,u_b,t_values) = ThermovisorData.radial_distribution_statistics(R,D)
+		(L,meanD,stdD,l_b,u_b,t_values) = ThermovisorImages.radial_distribution_statistics(R,D)
 
 		
-		p_radial = ThermovisorData.plot_radial_distribution_statistics(L,meanD,stdD,
+		p_radial = ThermovisorImages.plot_radial_distribution_statistics(L,meanD,stdD,
         	l_b,u_b)
 
 	end
@@ -339,9 +344,9 @@ end
 begin 
 	if is_rad_distr_eval
 	angs = collect(ang_range)
-	(angs_plot,Dang,stdDang,l_bang,u_bang,t_valuesang) = ThermovisorData.angular_distribution_statistics(angs,R,D)
+	(angs_plot,Dang,stdDang,l_bang,u_bang,t_valuesang) = ThermovisorImages.angular_distribution_statistics(angs,R,D)
 	
-	p_angular = ThermovisorData.plot_angular_distribution_statistics(angs_plot,Dang,stdDang,
+	p_angular = ThermovisorImages.plot_angular_distribution_statistics(angs_plot,Dang,stdDang,
         	l_bang,u_bang)
 	end
 end
@@ -405,18 +410,18 @@ begin # generating pattern
 	#patterns_number = 100
 	image_size = (500,1000)
 	img = fill(0.0,image_size...)# filling initial scene
-	generated_rois = ThermovisorData.generate_random_objs(image_patterns_type,(1:1:image_size[1],1:1:image_size[2]),patterns_number,pattern_sizes_range)
+	generated_rois = ThermovisorImages.generate_random_objs(image_patterns_type,(1:1:image_size[1],1:1:image_size[2]),patterns_number,pattern_sizes_range)
 	for r in generated_rois
 		img[r] = 10.0
 	end
 	rs = RescaledImage(img)
-	markers = ThermovisorData.marker_image(rs,distance_threshold = 0.0)
+	markers = ThermovisorImages.marker_image(rs,distance_threshold = 0.0)
 	separate_patterns_number = length(markers) # now we need to check for the separate patterns number 
-	rgb_markers = ThermovisorData.draw(rs)	# converting to rgb image
+	rgb_markers = ThermovisorImages.draw(rs)	# converting to rgb image
 end;
 
 # ╔═╡ 9c13d94e-ca2f-41d6-922a-428bb7a476c8
-generated_patterns_stat = ThermovisorData.CentredObjCollectionStat(generated_rois)
+generated_patterns_stat = ThermovisorImages.CentredObjCollectionStat(generated_rois)
 
 # ╔═╡ 96ad6e27-52dd-41aa-b115-f852049a485a
 md"""Number of separate patterns:    $(separate_patterns_number)"""
@@ -426,11 +431,11 @@ begin # fitting ROI's to image with several
 	fit_multiple
 	if is_fit_multiple
 
-		fitted_rois = ThermovisorData.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0,sort_by_area=true)
+		fitted_rois = ThermovisorImages.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0,sort_by_area=true)
 		if length(fitted_rois)>0
-			rgb_image_multi_roi = ThermovisorData.draw!(img,fitted_rois[1],show_cross = true,fill=true)
+			rgb_image_multi_roi = ThermovisorImages.draw!(img,fitted_rois[1],show_cross = true,fill=true)
 			for i in 2:length(fitted_rois)
-			 	ThermovisorData.draw!(rgb_image_multi_roi,fitted_rois[i],thickness = 		1,fill=true,show_cross = true)
+			 	ThermovisorImages.draw!(rgb_image_multi_roi,fitted_rois[i],thickness = 		1,fill=true,show_cross = true)
 			end
 			[rgb_markers;rgb_image_multi_roi]
 		else
@@ -442,7 +447,7 @@ begin # fitting ROI's to image with several
 end
 
 # ╔═╡ f1512fc5-4a7a-4274-9d42-3057d9aec04f
-StatOnRois = ThermovisorData.CentredObjCollectionStat(fitted_rois,nbins=Int(floor(patterns_number/12)))
+StatOnRois = ThermovisorImages.CentredObjCollectionStat(fitted_rois,nbins=Int(floor(patterns_number/12)))
 
 # ╔═╡ 2925fafa-4722-4335-ba49-77c6a8fb110b
 md"""
@@ -477,21 +482,21 @@ begin
 	if !isfile(coins_file)
 		download("http://docs.opencv.org/3.1.0/water_coins.jpg",coins_file)
 	end	
-	rescaled_coin = ThermovisorData.read_temperature_file(coins_file,inverse_intensity=true)
-	markers_coins = ThermovisorData.marker_image(rescaled_coin)
+	rescaled_coin = ThermovisorImages.read_temperature_file(coins_file,inverse_intensity=true)
+	markers_coins = ThermovisorImages.marker_image(rescaled_coin)
 	im_coin_float = rescaled_coin.initial
-	fitted_rois_coins = ThermovisorData.fit_all_patterns(rescaled_coin,multifit_roi_type)
+	fitted_rois_coins = ThermovisorImages.fit_all_patterns(rescaled_coin,multifit_roi_type)
 end
 
 # ╔═╡ 0044c49b-1c72-4f78-97ee-87932c97d2a9
 begin
 		if is_draw_rois=="show"
-		rgb_image_coins = ThermovisorData.draw!(im_coin_float,fitted_rois_coins[1],show_cross = true,fill=true)
+		rgb_image_coins = ThermovisorImages.draw!(im_coin_float,fitted_rois_coins[1],show_cross = true,fill=true)
 		for i in 2:length(fitted_rois_coins)
-				 ThermovisorData.draw!(rgb_image_coins,fitted_rois_coins[i],thickness = 1,fill=true,show_cross = true)
+				 ThermovisorImages.draw!(rgb_image_coins,fitted_rois_coins[i],thickness = 1,fill=true,show_cross = true)
 		end
 	else
-		rgb_image_coins = ThermovisorData.to_rgb(im_coin_float)
+		rgb_image_coins = ThermovisorImages.to_rgb(im_coin_float)
 		
 	end
 	rgb_image_coins
@@ -499,9 +504,9 @@ end
 
 # ╔═╡ b640fcd0-3e49-471d-b281-87137a781eba
 begin 
-	test_markers = ThermovisorData.marker_image(rescaled_coin)
+	test_markers = ThermovisorImages.marker_image(rescaled_coin)
 	before_sorting = simshow(test_markers.markers)
-	ThermovisorData.sort_markers!(test_markers)
+	ThermovisorImages.sort_markers!(test_markers)
 	after_sorting = simshow(test_markers.markers)
 end;
 
@@ -509,13 +514,14 @@ end;
 hcat(before_sorting,after_sorting)
 
 # ╔═╡ ecfd5449-29f6-452b-ae3d-d8e40932c8a0
-plot(ThermovisorData.hist_side(fitted_rois_coins,3),label=nothing,title="Distribution of objects by side")
+plot(ThermovisorImages.hist_side(fitted_rois_coins,3),label=nothing,title="Distribution of objects by side")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 ColorVectorSpace = "c3611d14-8923-5661-9e6a-0046d554d3a4"
 Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -530,7 +536,7 @@ Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
-PerceptualColourMaps = "54e51dfa-9dd7-5231-aa84-a4037b83483a"
+PlanckFunctions = "56edaee7-e77f-43d7-994d-8307b8de0a62"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
@@ -540,6 +546,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 [compat]
 BenchmarkTools = "~1.6.0"
 CSV = "~0.10.15"
+ColorSchemes = "~3.26.0"
 ColorVectorSpace = "~0.9.10"
 Colors = "~0.12.11"
 Distributions = "~0.25.120"
@@ -553,7 +560,7 @@ Images = "~0.25.3"
 Interpolations = "~0.14.0"
 LaTeXStrings = "~1.4.0"
 Optim = "~1.12.0"
-PerceptualColourMaps = "~0.3.6"
+PlanckFunctions = "~1.0.0"
 Plots = "~1.40.13"
 PlutoUI = "~0.7.62"
 Revise = "~3.8.0"
@@ -567,7 +574,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "9cb990c0c5ea3de043711b3669d6be0564135acf"
+project_hash = "7d840be103620e040059a9cf283c588c04a0541c"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "e2478490447631aedba0823d4d7a80b2cc8cdb32"
@@ -804,12 +811,6 @@ deps = ["Serialization", "Sockets"]
 git-tree-sha1 = "d9d26935a0bcffc87d2613ce14c527c99fc543fd"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
 version = "2.5.0"
-
-[[deps.Conda]]
-deps = ["Downloads", "JSON", "VersionParsing"]
-git-tree-sha1 = "b19db3927f0db4151cb86d073689f2428e524576"
-uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
-version = "1.10.2"
 
 [[deps.ConstructionBase]]
 git-tree-sha1 = "76219f1ed5771adbb096743bff43fb5fdd4c1157"
@@ -1865,12 +1866,6 @@ git-tree-sha1 = "7d2f8f21da5db6a806faf7b9b292296da42b2810"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.8.3"
 
-[[deps.PerceptualColourMaps]]
-deps = ["Colors", "Images", "Interpolations", "LinearAlgebra", "Printf", "PyPlot", "Statistics", "Test"]
-git-tree-sha1 = "cff82e9e59864573aa3f4694cc701e7083becdb8"
-uuid = "54e51dfa-9dd7-5231-aa84-a4037b83483a"
-version = "0.3.6"
-
 [[deps.Pixman_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_jll", "Libdl"]
 git-tree-sha1 = "db76b1ecd5e9715f3d043cec13b2ec93ce015d53"
@@ -1891,6 +1886,12 @@ deps = ["Pkg"]
 git-tree-sha1 = "f9501cc0430a26bc3d156ae1b5b0c1b47af4d6da"
 uuid = "eebad327-c553-4316-9ea0-9fa01ccd7688"
 version = "0.3.3"
+
+[[deps.PlanckFunctions]]
+deps = ["DelimitedFiles"]
+git-tree-sha1 = "a570a3ba3895d7b3ed87bd7f0f45faa1fa54aafe"
+uuid = "56edaee7-e77f-43d7-994d-8307b8de0a62"
+version = "1.0.0"
 
 [[deps.PlotThemes]]
 deps = ["PlotUtils", "Statistics"]
@@ -1973,18 +1974,6 @@ version = "1.10.4"
 git-tree-sha1 = "1d36ef11a9aaf1e8b74dacc6a731dd1de8fd493d"
 uuid = "43287f4e-b6f4-7ad1-bb20-aadabca52c3d"
 version = "1.3.0"
-
-[[deps.PyCall]]
-deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
-git-tree-sha1 = "9816a3826b0ebf49ab4926e2b18842ad8b5c8f04"
-uuid = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
-version = "1.96.4"
-
-[[deps.PyPlot]]
-deps = ["Colors", "LaTeXStrings", "PyCall", "Sockets", "Test", "VersionParsing"]
-git-tree-sha1 = "d2c2b8627bbada1ba00af2951946fb8ce6012c05"
-uuid = "d330b81b-6aea-500a-939a-2ce795aea3ee"
-version = "2.11.6"
 
 [[deps.QOI]]
 deps = ["ColorTypes", "FileIO", "FixedPointNumbers"]
@@ -2405,11 +2394,6 @@ git-tree-sha1 = "ca0969166a028236229f63514992fc073799bb78"
 uuid = "41fe7b60-77ed-43a1-b4f0-825fd5a5650d"
 version = "0.2.0"
 
-[[deps.VersionParsing]]
-git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
-uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
-version = "1.3.0"
-
 [[deps.Vulkan_Loader_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Wayland_jll", "Xorg_libX11_jll", "Xorg_libXrandr_jll", "xkbcommon_jll"]
 git-tree-sha1 = "2f0486047a07670caad3a81a075d2e518acc5c59"
@@ -2779,7 +2763,7 @@ version = "1.8.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═4460f260-f65f-446d-802c-f2197f4d6b27
+# ╟─4460f260-f65f-446d-802c-f2197f4d6b27
 # ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
 # ╠═fc6af4b0-1127-11f0-1b66-a59d87c5b141
 # ╠═051044c5-760c-4b60-90fc-82a347c3b6bc
@@ -2792,21 +2776,22 @@ version = "1.8.1+0"
 # ╠═43a1fb58-cd5e-4634-8770-0ff1809b2191
 # ╠═cd12d201-3dac-48c7-bd53-7c76944f5816
 # ╟─9fe323c0-9afc-43fd-bc21-1c45b73d50e0
-# ╟─794ebd5e-e9e0-4772-98a9-43e20c7ef4da
+# ╠═794ebd5e-e9e0-4772-98a9-43e20c7ef4da
+# ╠═22f19212-0b35-4bfe-b13a-590b9065c509
 # ╟─429cf33f-4422-44f0-beb8-5a1908a72273
+# ╟─13f01881-2645-429b-9856-6c3f19c0ad48
 # ╟─854731c1-7a34-4066-aa74-01629c87d75d
 # ╟─48c53ed9-127d-4e8e-bd29-416292057bff
 # ╟─9f55febb-b047-4b22-8575-209d45354d51
 # ╟─4feea216-ee48-42a3-b4ba-454f28ff690a
-# ╟─13f01881-2645-429b-9856-6c3f19c0ad48
 # ╟─5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
 # ╟─3fbc6b45-974e-430e-a4e6-960323015e74
 # ╟─ca5eea20-2bb3-4407-aa09-af8de2332b84
-# ╟─8b6f604d-157b-42cd-a0c6-8bd5562b47ef
+# ╠═8b6f604d-157b-42cd-a0c6-8bd5562b47ef
 # ╟─38a45961-0ffb-43d4-aa24-36d503ed4618
 # ╟─1467b184-22ac-4038-ad1b-f084d4443b27
 # ╟─c87a830a-f48a-4444-81bc-3efd69a130ad
-# ╟─768535e0-a514-4dff-ac8b-0d7ca126149c
+# ╠═768535e0-a514-4dff-ac8b-0d7ca126149c
 # ╟─5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
 # ╟─6d37916c-7895-49d3-b8a3-c8661050ebcb
 # ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e

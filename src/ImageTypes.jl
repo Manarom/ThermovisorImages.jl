@@ -1,6 +1,8 @@
 #brings custom types of images 
 # RescaledImage - normalized image version
 # FilteredImage - 
+export RescaledImage,FilteredImage,filter_image,
+filter_image!,filtered_mean,filtered_std
 """
 	    RescaledImage - structure stores the image data mapped to region  [0,1]
 Fields:
@@ -41,15 +43,18 @@ im - image with all values from 0 to 1
     """
         Type to store image with filtered temperature region 
 
-:full - filtered rescaled image of the same size as the input with all pixels which are not the part of the pattern with label value 
+Fields:
 
-:region_indices - cartesian indices of the pattern in the input image
+`full` - filtered rescaled image of the same size as the input with all pixels which are not the part of the pattern with label value 
 
-:reduced - image of reduced size where all not-inpatter pixels removed  
+`region_indices` - cartesian indices of the pattern in the input image
+
+`reduced` - image of reduced size where all not-inpatter pixels removed  
     (the 	scaling of this image is the same as of the input `imag.initial` 
     see [`RescaledImage`](@ref) type )
 
-:reduced_flag - bitmatrix version of (reduced)
+`reduced_flag` - bitmatrix version of (reduced)
+
 """
     mutable struct FilteredImage{T}
         full::RescaledImage{T}
@@ -63,7 +68,8 @@ im - image with all values from 0 to 1
 
 Returns the BitMatrix flag of filtered pattern in the whole image.
 
-Can be used as index matrix in the full image e.g.:
+Can be used as index matrix in the full image:
+
  `filtered_image.full.initial[full_image_flag(filtered_image)]` will return 
  all elements which belong to the pattern
 
@@ -128,7 +134,7 @@ function filter_image!(imag::AbstractMatrix,external_region_flag::FlagMatrix)
     """
     filter_image!(imag::RescaledImage{Float64},external_region_flag::FlagMatrix)::FilteredImage
 
-In-place filtering of `RescaledImage`, filtered object is wrapped around the input RescaledImage
+In-place filtering of [`RescaledImage`](@ref), filtered object is wrapped around the input RescaledImage
 """
     function filter_image!(imag::RescaledImage{Float64},
         external_region_flag::FlagMatrix)::FilteredImage
@@ -148,5 +154,5 @@ In-place filtering of `RescaledImage`, filtered object is wrapped around the inp
                 square_view_flag)       
     end
     filter_image!(imag::RescaledImage,c::CentredObj;external::Bool=false) = filter_image!(imag,cent_to_flag(c,imag.sz,external= !external))
-    filtered_mean(fltrd::FilteredImage) = Statistics.mean(fltrd.reduced[fltrd.reduced_flag])
-    filtered_std(fltrd::FilteredImage) = Statistics.std(fltrd.reduced[fltrd.reduced_flag])
+    filtered_mean(fltrd::FilteredImage) = Statistics.mean(view(fltrd.reduced[fltrd.reduced_flag]))
+    filtered_std(fltrd::FilteredImage) = Statistics.std(view(fltrd.reduced[fltrd.reduced_flag]))

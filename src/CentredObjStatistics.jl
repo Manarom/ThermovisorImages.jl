@@ -1,9 +1,8 @@
 
-
-
-mean_side(v) = Statistics.mean(side,v)
-mean_area(v) = Statistics.mean(area,v)
-mean_perimeter(v) = Statistics.mean(perimeter,v)
+export CentredObjCollectionStat, std_within_mask,
+radial_distribution_statistics,DistributionStatistics,
+angular_distribution_statistics,plot_radial_distribution_statistics,
+generate_random_objs
 
 max_side(v) = maximum(side,v)
 max_area(v) = maximum(area,v)
@@ -24,7 +23,14 @@ std_perimeter(v) = Statistics.std(map(perimeter,v))
 hist_side(v,nbins::Int=-1) = nbins<=0 ? fit(Histogram,map(side,v)) : fit(Histogram,map(side,v),nbins=nbins)
 hist_area(v,nbins::Int=-1) = nbins<=0 ? fit(Histogram,map(area,v)) : fit(Histogram,map(area,v),nbins=nbins)
 hist_perimeter(v,nbins::Int=-1) = nbins<=0 ? fit(Histogram,map(perimeter,v)) : fit(Histogram,map(perimeter,v),nbins=nbins)
+"""
+    CentredObjCollectionStat
 
+Calculates the following statistics on `CentredObj`s collection:
+
+minimal, maximal, mean and standard deviation of sides,areas and perimeters of all `CentredObj`
+objects in the collection `v`.
+"""
 struct CentredObjCollectionStat{T}
     N::Int
     maxs::T
@@ -32,7 +38,15 @@ struct CentredObjCollectionStat{T}
     means::T
     stds::T
     hists::T
-    CentredObjCollectionStat(v::Vector{C};nbins::Int=-1) where C<:CentredObj= begin
+    """
+    CentredObjCollectionStat(v::Vector{C};nbins::Int=-1) where C<:CentredObj
+
+Calculates statistics on `CentredObj`s vector:
+
+minimal, maximal, mean and standard deviation of sides,areas and perimeters of all `CentredObj`
+objects in the collection `v`.
+"""
+CentredObjCollectionStat(v::Vector{C};nbins::Int=-1) where C<:CentredObj= begin
             new{NamedTuple{(:side,:area,:perimeter)}}(length(v),
                 (max_side(v),max_area(v),max_perimeter(v)),
                 (min_side(v),min_area(v),min_perimeter(v)),
@@ -53,7 +67,7 @@ function Base.show(io::IO,s::CentredObjCollectionStat)
 end
 
 """
-std_within_mask(img::AbstractMatrix, c::CentredObj)
+    std_within_mask(img::AbstractMatrix, c::CentredObj)
 
 Evaluates standard deviation of temperature for all points within the `CentredObj` marker
 """
@@ -63,17 +77,17 @@ function std_within_mask(img::AbstractMatrix, c::CentredObj)
     return Statistics.std(mpper)
 end
 """
-radial_distribution_statistics(along_length_coordinate,distrib;length_per_pixel=1.0,is_use_student=true)
+    radial_distribution_statistics(along_length_coordinate::AbstractVector,
+        distrib::AbstractVecOrMat;
+        max_length=-1.0,min_length=-1.0)
 
-This function evaluates mean radial diatribution, it's standard deviation and student's coefficient 
-Input arguments `along_length`, `distrib` -  distribution matrix. All rows of distrib which contains NaNs will be 
-droped.
+Fills [`DistributionStatistics`](@ref) object for radial distribution
 
 Optional:
 
-max_length - maximal value of along_length_coordinate to be includet in to the statistics evaluation
+`max_length` - maximal value of along_length_coordinate to be includet in to the statistics evaluation
 
-is_use_student - flag if use students's coefficient
+`min_length` - minimal value of along_length_coordinate to be includet in to the statistics evaluation
 
 """
 function radial_distribution_statistics(along_length_coordinate::AbstractVector,
@@ -86,7 +100,7 @@ function radial_distribution_statistics(along_length_coordinate::AbstractVector,
             return DistributionStatistics(L,D)
 end
 """
-_inbounds_flag(L,D,max_length,min_length)
+    _inbounds_flag(L,D,max_length,min_length)
 
 Unsafe version of check! number of  rows in `D` should be the same as the number of 
 elements in `L`
@@ -111,13 +125,31 @@ function _inbounds_flag(L,D,max_length,min_length)
     end
     return not_nan_flag
 end
+"""
+    DistributionStatistics
 
+Basic descriptive statistics (mean and standard deviation) on temeprature distribution 
+of value for a given `coordinate`,   `D ` is the matrix of distribution, where each
+column corresponds to sample, thus rows number of `D` should be the same as the length 
+of `coordinate`, columns number is the number of samples.
+
+"""
 struct DistributionStatistics{T}
     coordinate::T
     mean_D::T
     std_D::T
     samples_number::Int
-    DistributionStatistics(coordinate,D) = begin
+
+"""
+    DistributionStatistics(coordinate::AbstractVector,D::AbstractMatrix)
+
+Basic descriptive statistics (mean and standard deviation) on temeprature distribution 
+of value for a given `coordinate`,   `D ` is the matrix of distribution, where each
+column corresponds to sample, thus rows number of `D` should be the same as the length 
+of `coordinate`, columns number is the number of samples.
+
+"""
+DistributionStatistics(coordinate::AbstractVector,D::AbstractMatrix) = begin
         len = length(coordinate)
         len != size(D,1) ? throw(DomainError("Inappropriate size of D and coordinates")) : nothing
         mean_D = similar(coordinate)
@@ -141,10 +173,16 @@ function eval_bounds(DS::DistributionStatistics;is_use_student::Bool=true,probab
     return (l_b,u_b,t_value)
  end
 """
-angular_distribution_statistics(angles,along_length_coordinate,distrib;
-                            max_length=-1.0,is_use_student::Bool=true)
+    angular_distribution_statistics(angles,along_length_coordinate,distrib;
+                            max_length=-1.0,min_length=-1.0)
 
-Function evaluates average temperature distribution vs angle of orientation
+Fills [`DistributionStatistics`](@ref) object for angular
+
+Optional:
+
+`max_length` - maximal value of along_length_coordinate to be includet in to the statistics evaluation
+
+`min_length` - minimal value of along_length_coordinate to be includet in to the statistics evaluation
 """
 function angular_distribution_statistics(angles,along_length_coordinate,distrib;
                             max_length=-1.0,min_length=-1.0)
@@ -157,7 +195,7 @@ end
 """
     points_within_line!(imag::AbstractMatrix,line_points::AbstractVector)
 
-Forces all line points to lie within the possible region according toe the image size
+Forces all line points to lie within the possible region according to the image size
 """
 function points_within_line!(imag::AbstractMatrix,line_points::AbstractVector)
     sz = size(imag)
@@ -219,8 +257,14 @@ end
                 ylabel=L"Temperature °C",
                 kwargs...)
 
-Plots radial ditribution averaged value, confidence bounds and confidence bounds
-multiplied by the Student's coefficient
+Plots radial ditribution averaged value, lower and upper confidence bounds as <d> ± std
+and confidence bounds multiplied by the Student's coefficient (if show_lower_bound and 
+show_upper_bound are true) calculated for the `pobability` value, if `length_scaler` is
+provied all coordinates are multiplied by this value (can be used to convert pixels to actual units)
+If `is_centered` is true coordinate goes from -L/2 to +L/2 where L is the maximum of coordinates.
+Other key-word arguments are the same as for the plot functions, additional keyword arguments are
+transfered directly to the plot function
+
 """
 function plot_radial_distribution_statistics(ds::DistributionStatistics;
                 show_lower_bound::Bool=false,
@@ -228,7 +272,8 @@ function plot_radial_distribution_statistics(ds::DistributionStatistics;
                 is_use_student::Bool=true,
                 probability::Float64=0.95,
                 length_scaler::Float64=1.0,
-                is_centered::Bool=true,label=nothing,
+                is_centered::Bool=true,
+                label=nothing,
                 minorgrid=true,
                 gridlinewidth=2,
                 title="Average temperature radial distribution",
@@ -263,17 +308,22 @@ function plot_radial_distribution_statistics(ds::DistributionStatistics;
         return p
     end
     """
-    plot_angular_distribution_statistics(angles,mean_D::T,std_D::T,
-                lower_bound::Union{T,Nothing}=nothing,upper_bound::Union{T,Nothing}=nothing;
+    plot_angular_distribution_statistics(ds::DistributionStatistics;
+                show_lower_bound::Bool=true,
+                show_upper_bound::Bool=true,
+                probability::Float64=0.95,
+                is_use_student::Bool=true,
                 length_scaler::Float64=1.0,
                 label=nothing,
                 minorgrid=true,
                 gridlinewidth=2,
                 title="Average temperature angular distribution",framestyle = :box,
-                dpi=600,xlabel = L"Angle  ,°", ylabel=L"Temperature °C",
-                kwargs...)      where T<:AbstractVector
+                dpi=600,xlabel = "Angle , °", ylabel="Temperature, °C",
+                kwargs...)
 
- The same as `plot_radial_distribution_statistics` but plots averaged angular distribution
+
+
+ The same as [`plot_radial_distribution_statistics`](@ref) but plots averaged angular distribution
 """
 function plot_angular_distribution_statistics(ds::DistributionStatistics;
                 show_lower_bound::Bool=true,
@@ -285,7 +335,7 @@ function plot_angular_distribution_statistics(ds::DistributionStatistics;
                 minorgrid=true,
                 gridlinewidth=2,
                 title="Average temperature angular distribution",framestyle = :box,
-                dpi=600,xlabel = L"Angle  \ ,\degree", ylabel=L"Temperature \ \degree C",
+                dpi=600,xlabel = "Angle , °", ylabel="Temperature, °C",
                 kwargs...)
 
                 return plot_radial_distribution_statistics(ds,

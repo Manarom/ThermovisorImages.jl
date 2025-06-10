@@ -1,4 +1,5 @@
  
+ export fit_centred_obj!,fit_all_patterns!,fit_all_patterns
  """
     fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix;
                                 starting_point::Union{Nothing,Vector{Float64}}=nothing,
@@ -39,18 +40,14 @@ function fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix;
 	    return (c,Optim.minimum(optim_out),optim_out)
     end
     """
-    fit_centred_obj!(c::CentredObj,image::FilteredImage;
-                                        starting_point::Union{Nothing,Vector{Float64}}=nothing,fit_reduced::Bool=true,
-                                        optimizer::Optim.ZerothOrderOptimizer = NelderMead(),options::Optim.Options=DEFAULT_FITTING_OPTIONS[])
+    fit_centred_obj!(c::CentredObj,image::FilteredImage;kwargs...)
 
 Fits [`CentredObj`](@ref) (modified) to filtered image (not modified)
 `fit_reduced` flag (default=true) indicates what version of the image should be fitted if true - 
-reduced otherwise - full image. For other input arguments see [`fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix)`](@ref)
+reduced otherwise - full image. For other input arguments see [`fit_centred_obj!`](@ref)
 """
-function fit_centred_obj!(c::CentredObj,image::FilteredImage;
-                                        starting_point::Union{Nothing,Vector{Float64}}=nothing,fit_reduced::Bool=true,
-                                        optimizer::Optim.ZerothOrderOptimizer = NelderMead(),options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) 
-        return fit_reduced ? fit_centred_obj!(c,reduced_image_flag(image),starting_point=starting_point,optimizer = optimizer,options=options) : fit_centred_obj!(c,full_image_flag(image),starting_point=starting_point,optimizer = optimizer,options=options)
+function fit_centred_obj!(c::CentredObj,image::FilteredImage,fit_reduced::Bool=true;kwargs...) 
+        return fit_reduced ? fit_centred_obj!(c,reduced_image_flag(image);kwargs...) : fit_centred_obj!(c,full_image_flag(image);kwargs...)
     end
     """
     fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
@@ -67,7 +64,7 @@ The type of ROI should be provided as a second arguments (by default it is a [`C
 
 img - input image of [`RescaledImage`](@ref) type
 
-For other input arguments see [`marker_image`](@ref) and [`fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix)`](@ref)
+For other input arguments see [`marker_image`](@ref) and [`fit_centred_obj!`](@ref)
 """
 function fit_all_patterns!(markers::MarkeredImage,::Type{T}=CircleObj;
                                             max_centred_objs::Int=200,
@@ -91,7 +88,16 @@ function fit_all_patterns!(markers::MarkeredImage,::Type{T}=CircleObj;
             c_vect = [T() for _ in 1:markers_number] # creating empty array of centred_objects
             return fit_all_patterns!(c_vect, markers, optimizer,options)
     end  
-    function fit_all_patterns!(c_vect::Vector{T},
+    """
+    fit_all_patterns!(c_vect::Vector{T},
+                            markers::MarkeredImage,
+                            optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
+                            options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
+
+Fits markered image pattern and fills precreated avector of `Centerdobj`s
+See [`fit_all_patterns!`](@ref)
+"""
+function fit_all_patterns!(c_vect::Vector{T},
                             markers::MarkeredImage,
                             optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
                             options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
@@ -105,7 +111,8 @@ function fit_all_patterns!(markers::MarkeredImage,::Type{T}=CircleObj;
             end
             return c_vect
     end
-    function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
+    """
+    fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
                                     level_threshold::Float64=-1.0,
                                     distance_threshold::Float64=-15.0,
                                     max_centred_objs::Int=200,
@@ -113,8 +120,19 @@ function fit_all_patterns!(markers::MarkeredImage,::Type{T}=CircleObj;
                                     is_descend::Bool = true,
                                     optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
                                     options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
-        # level_threshold::Float64=-1.0,
-        # distance_threshold::Float64=-15.0
+
+Markers `RescaledImage` and fits all patterns
+See [`fit_all_patterns!`](@ref)
+"""
+function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
+                                    level_threshold::Float64=-1.0,
+                                    distance_threshold::Float64=-15.0,
+                                    max_centred_objs::Int=200,
+                                    sort_by_area::Bool = false,
+                                    is_descend::Bool = true,
+                                    optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
+                                    options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
+
         markers = marker_image(img,level_threshold=level_threshold,
                                 distance_threshold=distance_threshold)
 
