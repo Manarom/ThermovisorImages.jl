@@ -105,7 +105,7 @@ if external  is true than as a filtering flag the inverse of centered object ima
 """
 filter_image(imag::AbstractMatrix,c::CentredObj;external=false) = filter_image!(copy(imag),cent_to_flag(c,size(imag),external= !external))
 filter_image(imag,flag::FlagMatrix) =  filter_image!(copy(imag),flag)
-filter_image(imag::RescaledImage;label = 1) = filter_image(imag,marker_image(imag),label=label)
+filter_image(imag::RescaledImage;label::Int = 1) = filter_image(imag,marker_image(imag),label=label)
    """
     filter_image(imag::RescaledImage,c::CentredObj;external=false)
 

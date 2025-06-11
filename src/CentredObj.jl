@@ -28,6 +28,8 @@ To impement `CentredObj` abstraction one needs to implement:
 
 [`perimeter`](@ref) - Object's perimeter
 
+[`Base.size`](@ref) - should always return the minimum size of frame which wrappes the centred obj, e.g. for circle it is [diameter,diemater]
+
 [`is_within`](@ref) - function to check if inds are within the `CentredObj`
 
 [`line_within_mask`](@ref) - function to check if all line points are within the `CentredObj`
@@ -83,7 +85,7 @@ end
 Function to check if indices are within [`CentredObj`](@ref)
 """
 is_within(c::CentredObj,_)=error(DomainError(typeof(c),"no `is_within` implementation"))
-dimenisons(c::CentredObj)=  error(DomainError(typeof(c),"no `dimentions` implementation"))
+dimensions(c::CentredObj)=  getfield(c,:dimensions)
 """
     side(c::CentredObj)
 
@@ -266,12 +268,6 @@ function image_fill_discr(image::AbstractMatrix,c::CentredObj)
      im_copy = copy(image)   
      return x-> image_discr(image, fill_im!(im_copy,fill_from_vect!(c,x)))
 end
-"""
-    dimensions(c::CentredObj)
-
-Return dimensional parameters (vector)
-"""
-function dimensions(c::CentredObj)  c.dimensions end
 
 # arithmetic operations on CentredObj
 """
@@ -330,13 +326,13 @@ end
 
 name(::CircleObj) = "Circle"
 parnumber(::Type{CircleObj}) = 3
-diameter(c::CircleObj) = c.dimensions[]
+diameter(c::CircleObj) = dimensions(c)[]
 perimeter(c::CircleObj) = 2*π*radius(c)
-radius(c::CircleObj) = c.dimensions[]/2
+radius(c::CircleObj) = diameter(c)/2
 side(c::CircleObj) = diameter(c)
 area(c::CircleObj) = π*radius(c)^2
 is_within(c::CircleObj,inds::AbstractVector) = sqrt(sum(abs2  , c.center .- inds)) < radius(c)
-
+Base.size(c::CircleObj) = (diameter(c),diameter(c))
 """
     fill_x0!(x0,im_bin::FlagMatrix,::CircleObj)
 
@@ -371,8 +367,9 @@ function line_within_mask(c::CircleObj,ang,line_length)
                    c.center[2] +  lsin]
 end
 function convert_to_drawable(c::CircleObj;fill=false,thickness::Int=-1)
-    if (thickness==-1)&& !fill || thickness >= radius(c)
-        thickness = int_floor(0.17*diameter(c))
+    thickness_threshold = int_floor(0.35*radius(c))
+    if thickness==-1|| thickness >= radius(c) || thickness<thickness_threshold
+        thickness = thickness_threshold
     end
     return ImageDraw.CirclePointRadius(c.center[2],c.center[1],radius(c),thickness=thickness,fill=fill)
 end
@@ -389,11 +386,14 @@ mutable struct SquareObj <:CentredObj
     end
     SquareObj() = new(MVector{2}(1,1),MVector{1}(1))
 end
+
 name(::SquareObj) = "Square"
 parnumber(::Type{SquareObj}) = 3
-area(c::SquareObj)=^(c.dimensions[],2)
-side(c::SquareObj) = c.dimensions[]
+area(c::SquareObj)=^(dimentions(c)[],2)
+side(c::SquareObj) = dimensions(c)[]
 perimeter(c::SquareObj) = 4*side(c)
+Base.size(c::SquareObj) = (side(c),side(c))
+
 is_within(c::SquareObj,inds::AbstractVector) = begin
     a = side(c)/2
     c.center[1]-a <=inds[1]<=c.center[1]+a   && c.center[2]-a <=inds[2]<=c.center[2]+a
@@ -478,6 +478,7 @@ parnumber(::Type{RectangleObj}) = 4
 area(c::RectangleObj)=*(side(c)...)
 perimeter(c::RectangleObj) = 2*sum(side(c))
 side(c::RectangleObj) = (c.dimensions[1],c.dimensions[2])
+Base.size(c::RectangleObj) = side(c)
 is_within(c::RectangleObj,inds::AbstractVector) = begin
     (a,b) = side(c)
     a/=2
@@ -682,9 +683,9 @@ function along_line_distribution_xiaolin_wu(img::AbstractMatrix{T}, y0, x0, y1, 
 """
     within_mask_line_points_distribution(imag::AbstractMatrix,c::CentredObj,direction_angle=0.0,line_length=10.0;use_wu::Bool=false)
 
-Function evaluates the distribution of values in `imag` matrix along the line with length `line_length` in pixels
+Evaluates the distribution of values in `imag` matrix along the line with length `line_length` in pixels
 oriented with the angle `direction_angle` in degrees  with respect to the posistive direction of oX (column index increase), 
-this line lies within the mask (`CentreObj`) and goes through its center.
+this line lies within the roi (`CentreObj`) and goes through its center.
 
 Function returns:
 
