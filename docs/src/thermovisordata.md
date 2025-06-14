@@ -2,5 +2,5 @@
 
 ```@autodocs
     Modules = [ThermovisorImages]
-    Order   = [:type,:function]
+    Order   = [:module,:type,:function]
 ```

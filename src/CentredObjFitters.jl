@@ -101,8 +101,11 @@ function fit_all_patterns!(c_vect::Vector{T},
                             markers::MarkeredImage,
                             optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
                             options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
-            
-            Threads.@sync for (i,c) in enumerate(c_vect)
+            num_patterns = length(markers)
+            c_length = length(c_vect) 
+            num_patterns =  num_patterns < c_length ? num_patterns : c_length
+            v = @view c_vect[1:num_patterns]
+            Threads.@sync for (i,c) in enumerate(v)
                 Threads.@spawn begin 
                     (fl,i_min,_)  = shrinked_flag(markers,i) # returns flag and minimu and maximal indices in the initial array
                     fit_centred_obj!(c,fl,optimizer = optimizer,options = options)

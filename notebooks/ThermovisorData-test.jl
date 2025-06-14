@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.6
+# v0.20.9
 
 using Markdown
 using InteractiveUtils
@@ -45,7 +45,7 @@ md"""
 *  5. Fitting marker position and size to the pattern
 *  6. Evaluating radial and angular temperature distributions
 *  7. Fitting multiple ROIs to image with many patterns
-*  8. Statistics evaluation on fitted ROIs spatial properties
+*  8. Fitted ROIs spatial properties statistics
 *  9. Recalculation of the temperature field of the surface and the area of interest with a new value of emissivity
 """
 
@@ -138,13 +138,13 @@ Universal constructor allows one to create `CentredObj`s:
 ```julia
 	obj_from_vect(::Type{T},v::AbstractVector) where T<:CentredObj
 ```
-Here, first argument is the type of object (`CircleObj`, `SquareObj` or `RectangleObj`), `v` is the vector of parameters, first two elements of `v` are centre coordinates other are dimentions, e.g. square ROI centred at (100,120) with side length 50 can be construted by calling:
+Here, first argument is the type of object (**`CircleObj`**, **`SquareObj`** or **`RectangleObj`**), **`v`** is the vector of parameters, first two elements of `v` are centre coordinates other are dimentions, e.g. square ROI centred at (100,120) with side length 50 can be construted by calling:
 
 ```julia
 	square=obj_from_vect(SquareObj,[100,120,50])
 ```
-To convert internal image format to the drawable RGB matrices there is a `draw` function, it is also possible to draw the image together with the `CentredObj` on it.
-To convert images to RGB schemes from `ColorShemes` package are used. 
+To convert internal image format to the drawable RGB matrices there is a **`draw`** function, it is also possible to draw the image together with the **`CentredObj`** on it.
+To convert images to RGB schemes from **`ColorShemes.jl`** package are used. 
 ```julia
 	img # RescaledIMage or Matrix{Float64}
 	rgb_img = ThermovisorImages.draw(img,color_scheme=:inferno)# converts to RGB
@@ -219,21 +219,21 @@ end
 # ╔═╡ 5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
 md"""
 ### 3,4. Finding patterns and filtering the image
-After loading from file, the image is stored as `RescaledImage` object, a wrapper struct, which holds both initial image and image with temperatures, normalized to one. To find and label image features `marker_image` function is used.
+After loading from file, the image is stored as **`RescaledImage`** object, a wrapper struct, which holds both initial image and image with temperatures, normalized to one. To find and label image features **`marker_image`** function is used.
 
 ```julia
 	marker_image(rescaled::RescaledImage;
             level_threshold::Float64=-1.0,
             distance_threshold::Float64=-15.0)
 ```
-This function performs several operations using `Images.jl` package:
+This function performs several operations using **`Images.jl`** package:
 
 *  1.Binarization
 *  2.Distance transform
 *  3.Labeling 
 *  5.Watershed
 
-By default (if level_threshold is outside of the 0...1 range) Otsu algorithm is used to binarize the image.  It returns a `MarkeredImage` type object, which stores in **markers** field the matrix of labels - matrix of the same size as the initial image, but with integer values. In this matrix each pattern has individual integer value. `MarkeredImage` also stores the coordinates of each pattern.  
+By default (if level_threshold is outside of the 0...1 range) Otsu algorithm is used to binarize the image.  It returns a **`MarkeredImage`** type object, which stores in **markers** field the matrix of labels - matrix of the same size as the initial image, but with integer values. In this matrix each pattern has individual integer value. **`MarkeredImage`** also stores the coordinates of each pattern.  
 """
 
 # ╔═╡ 1644d6a3-8f11-4ca2-8613-b9e1d4896af0
@@ -258,9 +258,9 @@ md" Number of patterns $(length(toy_markered))"
 
 # ╔═╡ dde0003d-0fe3-41da-a582-27f88a57d2c5
 md"""
-There are several methods for `ThermovisorData.filter_image` function. 
+There are several methods for **`filter_image`** function. 
 After labeling, by default it takes the last label (maximum label value), but label value could be provided externally with a corresponding keyword **label**
-If the `CentredObj` is provided as a second input argument filtering just removes all elements of the initial image which are not within the `CentredObj`.
+If the `CentredObj` is provided as a second input argument filtering just removes all elements of the initial image which are not within the **`CentredObj`**.
 Some methods of filter_image function:
 ```julia
 	filter_image(imag::RescaledImage;label::Int=1) # filters by pattern label
@@ -276,7 +276,7 @@ Show filtered image = $(@bind filter_init_image CheckBox(default=true))
 
 filter by $(@bind filter_by_option Select(["CentredObj", "Pattern"]))
 
-Show image reduced to pattern/roi size $(@bind is_show_filtered_reduced CheckBox(default=false))
+Show image reduced to pattern/roi size $(@bind is_show_filtered_reduced CheckBox(default=true))
 
 """
 
@@ -305,15 +305,20 @@ save_distr ? savefig(joinpath(notebook_path,"heatmap.png")) : nothing
 # ╔═╡ c87a830a-f48a-4444-81bc-3efd69a130ad
 md"""
 
-###  5,6. Fitting marker and Evaluating radial and angular temperature distributions
+###  5,6. Evaluating radial and angular temperature distributions within the ROI
+------------------------
+Temperature distribution along the line, which goes through the ROI's centre within the ROI, can be obtained by calling 
 
-This segment illustrates an example of temperature distribution within the Region of Interest (ROI) calculation, as well as how the heated object is fitted within this analysis.
+```julia
+	along_mask_line_distribution(imag::AbstractMatrix,c::CentredObj,direction_angle=0.0,line_length=10.0;length_per_pixel=1.0,use_wu::Bool=false)
+```
+It return three vectors:  along line coordinate, along line values and along line points coordinates in **`image`**, **`direction_angle`** is the rotation angle of line which goes through the center of roi and  **`line_length`** is the length of this line, additionaly, keyword argument  **`length_per_pixel`** can be provided to convert the coordinates from pixels to appropriate units.
 
 """
 
 # ╔═╡ 6d37916c-7895-49d3-b8a3-c8661050ebcb
 md"""
-There are two algorithms available for drawing a line within an image: `bresenham` (default) and `xiaolin_wu`. Both were taken from the `ImageDraw` package. This algorithm produces two coordinates for every point along the line, and the resulting temperature for each position is calculated as the average of temperatures for these two points. 
+There are two algorithms available to obtain the line points within the image viz **`bresenham`** (default) and **`xiaolin_wu`**. Both were taken from the **`ImageDraw`** package. **`xiaolin_wu`** algorithm produces two coordinates for every point along the line, and the resulting temperature for each position is calculated as the average of temperatures for these two points. 
 
 Try Xiaolin-Wu algorithm? $(@bind is_use_wu CheckBox(default=false))
 
@@ -355,9 +360,9 @@ begin
 	if image_type=="filtered"
 		image_to_show = ThermovisorImages.reduced_image(filtered_by_markers)
 	elseif image_type =="not filtered"
-		image_to_show = rescaled_image.im
+		image_to_show = rescaled_image.initial
 	else # full filtered
-		image_to_show = filtered_by_markers.full.im
+		image_to_show = filtered_by_markers.full.initial
 	end
 	if is_fit_mask 
 		fit_centred_obj!(fitted_obj,filtered_by_markers, image_type=="filtered") 
@@ -373,7 +378,7 @@ fitted_obj
 
 # ╔═╡ e1ccfd33-3d54-4249-86f1-381a1ef90615
 md"""
-The upper figure shows the ROI and the inclined line which goes through its center. By adjusting ROI position, the orientation and the length of this line temperature distribution of some feature can be studied. \
+Upper figure shows the image, ROI and inclined line which goes through ROI's center. By adjusting ROI position, the orientation and the length of this line temperature distribution of some feature can be studied. \
  	direction angle in degrees = $(@bind direction_angle Slider(0:1:360,show_value=true,default=45)) \
 	line length in $(is_fit_mask ? "mm" : "pixels" )= $(@bind line_length Slider(0.1:0.1:250,show_value=true,default=100))
 """
@@ -399,10 +404,8 @@ fitted_obj
 
 # ╔═╡ 39e50296-21ff-4407-894f-2a380dc51e21
 begin 
-	
-	
 		new_line =line_length# minimum(side(fitted_obj))-5
-		ang_range = 0.0:1:60 # range of angles 
+		ang_range = 0.0:1:180 # range of angles 
 		(R,D) = ThermovisorImages.radial_distribution(image_to_show,fitted_obj,ang_range,line_length=new_line,length_per_pixel=mm_per_pixel[])
 
 		DS = ThermovisorImages.radial_distribution_statistics(R,D)
@@ -414,6 +417,25 @@ begin
 	
 	p_angular = ThermovisorImages.plot_angular_distribution_statistics(angular_DS)
 end;
+
+# ╔═╡ 32848d3c-866b-4a6e-be07-ff6aae73d754
+md"""
+It is also possible to evaluate the statistics on radial and angular distribution of image points within the ROI object.
+Function 
+```julia
+(R,D) = radial_distribution(imag::AbstractMatrix,c::CentredObj,angles_range::AbstractRange; line_length=0.0,length_per_pixel=1.0,use_wu::Bool=false)
+```
+Evaluates the radial distribution, of the  **`image`** points within the object **`c`** of **`CentredObj`** subtype, **`angles_range`** is the range angles, **`line_length`** is the length of the line, **`length_per_pixel`** can be used to convert the along line coordinates from pixels to some real units. Function returns a vector **`R`** of coordinates along the line, **`D`** is the matrix, each column corresponds to the values of temperature for a particular angle in the input range.
+
+After calculating the radial distribution; statistics on radial and angular  distribution can be evaluated by calling:
+
+```julia
+	DS_radial = radial_distribution_statistics(along_length_coordinate,
+        distrib)
+	DS_angular = angular_distribution_statistics(angles,along_length_coordinate,distrib)
+```
+These functions evaluate averaged over the angle and line length
+"""
 
 # ╔═╡ ea232c80-261b-4dc2-8891-2b7090f36760
 p_radial
@@ -435,12 +457,46 @@ begin
 	end
 end;
 
-# ╔═╡ 764a320c-ff6b-48d0-a5b4-48a3df3ece01
+# ╔═╡ cc909b53-ed4d-44a1-a410-ff25533afc2d
 md"""
 ###  7,8. Fitting multiple ROI objects to the image with several temperature features
 
-In this block we are going to create the image with multiple randomly distributed  patterns and fit a vector of  `CentredObj` ROIs to this image by calling `ThermovisorData.fit_all_patterns` function.
+This section goes through the creation of the image with multiple randomly distributed  patterns and fitting a vector of  `CentredObj` ROIs.
 
+First, create several  ROIs, this can be done by calling special function
+```julia
+	generate_random_objs(::Type{T},centers_range::NTuple{2,R},obj_number::Int,dimension_range::R) where {T<:CentredObj,R<:StepRange{Int,Int}}
+```
+This functions returns a Vector of `obj_number` randomly distributed in space ROIs of predefined type, `centers_range` and `dimension_range` arguments allows to provide StepRanges to set the range of ROIs centres and dimensions variation. After generating ROIs they can be placed in matrix of float by indexing. The following code places ten randome rois in the matrix. 
+```julia
+	im = fill(0.0,100,200)
+	rois = generate_random_objs(SquareObj,(20:80,1:200),10,20:1:30)
+	for r in rois
+		im[r]=1.0
+	end
+```
+
+ calling `fit_all_patterns` function.
+
+```julia
+	fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
+    			                    max_centred_objs::Int=200,
+                			        sort_by_area::Bool = false,
+                        			is_descend::Bool = true)
+
+```
+ 	This function fits `CentredObj`s of specified type, to all patterns and returns the vector of ROIs. Number of ROIs can be limited to `max_centred_obj` and also it is possible to sort all patterns by area before fitting by setting `sort_by_area`, if `is_descend` is true, all patterns will be sorted in area descending order. E.g. if one needs to fit four largest patterns with rectangular ROIs:
+
+```julia
+	vect_of_rois = fit_all_patterns(img,RectangleObj,max_centred_objs=4,sort_by_area = true)
+```
+
+It is also possible to precreate the Vector of empty ROIs and fit them to the image patterns using :
+
+```julia
+	vect_of_rois = [SquareObj for  _ in 1:10] # creates 10 square ROIs
+	fit_all_patterns!(vect_of_rois,marker_image(img)) # fits rois to patterns
+```
 """
 
 # ╔═╡ a76e0a08-393e-472a-8df5-0650eb6a60af
@@ -453,21 +509,24 @@ md"""
 Select objects ROI type = $(@bind multifit_roi_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) 
 """
 
-# ╔═╡ cc909b53-ed4d-44a1-a410-ff25533afc2d
-md"Initial image with randomly distributed patterns"
-
 # ╔═╡ 0badf26a-38fa-45be-9704-d4e80b12a9cb
 md"""
 	Select this checkbox to fit all objects $(@bind is_fit_multiple CheckBox(default=true))
 	"""
 
 # ╔═╡ f8154558-d0cb-4b27-8c0d-b5cac07a099c
-md"Patterns size range $(@bind pattern_sizes_range confirm(RangeSlider(5:1:100,default=5:1:20)))"
+md"Patterns size range $(@bind pattern_sizes_range confirm(RangeSlider(5:1:120,default=10:1:50)))"
 
 # ╔═╡ 39e31290-e7b5-47ce-ac46-aebc33ddfa54
 md"""
-	Number of patterns $(@bind patterns_number confirm(PlutoUI.Slider(1:1:200,default=30,show_value=true)))
+	Number of generated patterns $(@bind patterns_number confirm(PlutoUI.Slider(1:1:200,default=30,show_value=true)))
 	"""
+
+# ╔═╡ 7e484bde-1f2f-4d32-87c6-64ff884dc272
+md""" Number of patterns to fit $(@bind max_obj_number  Select(1:patterns_number,default=patterns_number))"""
+
+# ╔═╡ 304ac75d-bdc4-41de-bd2f-d1843ecd22f9
+md"Sort by area? $(@bind is_sort_by_area CheckBox(false))"
 
 # ╔═╡ 10954f10-9414-4839-872f-c2516d5d8e4e
 md"""
@@ -482,7 +541,7 @@ begin # generating pattern
 	img = fill(0.0,image_size...)# filling initial scene
 	generated_rois = ThermovisorImages.generate_random_objs(image_patterns_type,(1:1:image_size[1],1:1:image_size[2]),patterns_number,pattern_sizes_range)
 	for r in generated_rois
-		img[r] = 10.0
+		img[r] = rand(5:10)
 	end
 	rs = RescaledImage(img)
 	markers = ThermovisorImages.marker_image(rs,distance_threshold = 0.0)
@@ -496,28 +555,60 @@ generated_patterns_stat = ThermovisorImages.CentredObjCollectionStat(generated_r
 # ╔═╡ 96ad6e27-52dd-41aa-b115-f852049a485a
 md"""Number of separate patterns:    $(separate_patterns_number)"""
 
+# ╔═╡ 9d79ba97-5aa8-4d60-8cf4-523a28b2e5ae
+md"Generated patterns"
+
+# ╔═╡ 6c78d805-4b14-4b7f-ad96-439d2a56605e
+rgb_markers
+
+# ╔═╡ fcb71c81-8ee5-4cf7-b293-ab97261d7213
+md"Fitted patterns"
+
 # ╔═╡ 6adfae4d-5137-4692-b9f3-3793c4c76202
 begin # fitting ROI's to image with several 
 	fit_multiple
 	if is_fit_multiple
 
-		fitted_rois = ThermovisorImages.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0,sort_by_area=true)
+		fitted_rois = ThermovisorImages.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0,sort_by_area=is_sort_by_area,max_centred_objs=max_obj_number)
 		if length(fitted_rois)>0
 			rgb_image_multi_roi = ThermovisorImages.draw(img,fitted_rois[1],show_cross = true,fill=true)
 			for i in 2:length(fitted_rois)
 			 	ThermovisorImages.draw!(rgb_image_multi_roi,fitted_rois[i],fill=true,show_cross = true)
 			end
-			[rgb_markers;rgb_image_multi_roi]
-		else
-			rgb_markers
+			 rgb_image_multi_roi
 		end
 	else
 		println("There is no fitted ROIs")
 	end
 end
 
+# ╔═╡ 0cdb27f4-9796-479b-b43f-b349eaabc049
+md"""
+After fitting the regions of interest, it is possible to calculate basic statistics on the geometric properties of the objects by creating the objects of `CentredObjCollectionStat` type. This object contains data on maximal, minimal,averages, standard deviations and disribution hystorgams of areas, perimeters and sides of ROIs.
+```julia
+	stat_on_rois = CentredObjCollectionStat(fitted_rois)
+	stat_on_rois.maxs.side # returns the Tuple of (maximum side values,object index)
+	stat_on_rois.maxs.area # the same, but for area
+	h = stat_on_rois.hists.area # return histogram which can be plotted using plot(h)
+```
+and plot the histogram
+```julia
+	plot(stat_on_rois.hists.area) # plots side - distribution histogram 
+```
+
+
+"""
+
 # ╔═╡ f1512fc5-4a7a-4274-9d42-3057d9aec04f
-StatOnRois = ThermovisorImages.CentredObjCollectionStat(fitted_rois,nbins=Int(floor(patterns_number/5)))
+StatOnRois = ThermovisorImages.CentredObjCollectionStat(fitted_rois,nbins=Int(floor(patterns_number/3)))
+
+# ╔═╡ d91b478b-57fa-4f26-a05c-649097202102
+md"""
+	Maximal area of  $(StatOnRois.maxs.area[1])  has the ROI # $(StatOnRois.maxs.area[2])
+
+	The smallest ROIs # $(StatOnRois.mins.area[2]) has the area of  $(StatOnRois.mins.area[1])
+
+	"""
 
 # ╔═╡ 2925fafa-4722-4335-ba49-77c6a8fb110b
 md"""
@@ -526,7 +617,7 @@ Show histogram for $(@bind selected_hist Select([:side,:area,:perimeter]))
 """
 
 # ╔═╡ e7e6884a-1145-4a01-a429-6c4a84e7ea33
-plot(getfield(StatOnRois.hists,selected_hist),title="Distribution of ROIs by "*string(selected_hist),label=nothing,alpha=0.5)
+multi_hist = plot(getfield(StatOnRois.hists,selected_hist),title="Distribution of ROIs over  "*string(selected_hist),label=nothing,alpha=0.5,dpi=600)
 
 # ╔═╡ 68b33b39-5ef5-4560-b4b2-1fe2f43a3628
 md" Save multiple patterns fit ? $(@bind is_save_multipattern_fit CheckBox(default=false))"
@@ -537,9 +628,16 @@ begin
 		FileIO.save(joinpath(assets_folder,"multiple_patterns_initial.png"),rgb_markers)
 		if is_fit_multiple
 			FileIO.save(joinpath(assets_folder,"multiple_patterns_fitted.png"),rgb_image_multi_roi)
+			savefig(multi_hist,joinpath(assets_folder,"multiple_patterns_hist.png"))
 		end
 	end
-end
+end;
+
+# ╔═╡ 1eeee988-8af7-42f2-8d8c-a89402170f1a
+md""" 
+### 9. Recalculation of the temperature field of the surface and the area of interest with a new value of emissivity
+
+"""
 
 # ╔═╡ 821a7c95-f4da-410d-b780-111abb6d0db5
 md"""
@@ -554,7 +652,7 @@ begin
 	end	
 	rescaled_coin = ThermovisorImages.read_temperature_file(coins_file,inverse_intensity=true)
 	markers_coins = ThermovisorImages.marker_image(rescaled_coin)
-	im_coin_float = rescaled_coin.initial
+	im_coin_float = rescaled_coin.im
 	fitted_rois_coins = ThermovisorImages.fit_all_patterns(rescaled_coin,multifit_roi_type)
 end
 
@@ -582,9 +680,6 @@ end;
 
 # ╔═╡ 7a00ce43-94e2-4f68-b651-b57bf7d6ab05
 hcat(before_sorting,after_sorting)
-
-# ╔═╡ ecfd5449-29f6-452b-ae3d-d8e40932c8a0
-plot(ThermovisorImages.hist_side(fitted_rois_coins,3),label=nothing,title="Distribution of objects by side")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2833,16 +2928,16 @@ version = "1.8.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╟─4460f260-f65f-446d-802c-f2197f4d6b27
+# ╠═4460f260-f65f-446d-802c-f2197f4d6b27
 # ╟─79b31b84-afe0-4aac-90bf-97e8cbfff5e2
-# ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
+# ╠═2c5e6e4c-92af-4991-842a-7e5bdc55a46d
 # ╟─fc6af4b0-1127-11f0-1b66-a59d87c5b141
 # ╟─051044c5-760c-4b60-90fc-82a347c3b6bc
 # ╟─4f93b7ba-3488-446d-8043-718fbdc5b808
 # ╟─215ed2f4-71ba-4cb5-b198-677d0d7ffb38
 # ╟─f6c1be87-94d2-4b08-a52d-6eb637192ee8
 # ╟─870113c3-b439-4d34-90d8-fdd8a158f9dd
-# ╟─dd4a9e93-0d4e-497a-8ca4-0e8f36205ffb
+# ╠═dd4a9e93-0d4e-497a-8ca4-0e8f36205ffb
 # ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
 # ╟─cd12d201-3dac-48c7-bd53-7c76944f5816
 # ╟─9fe323c0-9afc-43fd-bc21-1c45b73d50e0
@@ -2869,7 +2964,7 @@ version = "1.8.1+0"
 # ╟─c87a830a-f48a-4444-81bc-3efd69a130ad
 # ╟─768535e0-a514-4dff-ac8b-0d7ca126149c
 # ╟─5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
-# ╠═6d37916c-7895-49d3-b8a3-c8661050ebcb
+# ╟─6d37916c-7895-49d3-b8a3-c8661050ebcb
 # ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
 # ╟─c67290fc-6291-4f3e-a660-a3c4afa3a5e3
 # ╟─71eb240a-5a45-4bf3-b35c-a5820ca6da6c
@@ -2879,32 +2974,39 @@ version = "1.8.1+0"
 # ╟─b096c4f2-9dce-409d-874a-a851f577bf92
 # ╟─59f9a7f2-9601-431c-a897-543fa25c64c4
 # ╟─39e50296-21ff-4407-894f-2a380dc51e21
+# ╟─32848d3c-866b-4a6e-be07-ff6aae73d754
 # ╟─ea232c80-261b-4dc2-8891-2b7090f36760
-# ╟─8a558860-00d8-4f87-b900-4620881ade90
+# ╠═8a558860-00d8-4f87-b900-4620881ade90
 # ╟─e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
-# ╟─b4ce12e3-29ec-41ac-89d3-06d08ef2beca
-# ╟─764a320c-ff6b-48d0-a5b4-48a3df3ece01
-# ╟─a76e0a08-393e-472a-8df5-0650eb6a60af
-# ╟─6e728ea6-38be-437a-96b4-9fa084f8fec5
+# ╠═b4ce12e3-29ec-41ac-89d3-06d08ef2beca
 # ╟─cc909b53-ed4d-44a1-a410-ff25533afc2d
 # ╟─d5b6f453-5e92-41e6-a45f-cb75660bc198
+# ╟─a76e0a08-393e-472a-8df5-0650eb6a60af
+# ╟─6e728ea6-38be-437a-96b4-9fa084f8fec5
+# ╟─0badf26a-38fa-45be-9704-d4e80b12a9cb
+# ╠═f8154558-d0cb-4b27-8c0d-b5cac07a099c
+# ╟─39e31290-e7b5-47ce-ac46-aebc33ddfa54
 # ╟─9c13d94e-ca2f-41d6-922a-428bb7a476c8
 # ╟─96ad6e27-52dd-41aa-b115-f852049a485a
-# ╟─0badf26a-38fa-45be-9704-d4e80b12a9cb
-# ╟─f8154558-d0cb-4b27-8c0d-b5cac07a099c
-# ╟─39e31290-e7b5-47ce-ac46-aebc33ddfa54
+# ╟─7e484bde-1f2f-4d32-87c6-64ff884dc272
+# ╟─304ac75d-bdc4-41de-bd2f-d1843ecd22f9
 # ╟─10954f10-9414-4839-872f-c2516d5d8e4e
+# ╟─9d79ba97-5aa8-4d60-8cf4-523a28b2e5ae
+# ╟─6c78d805-4b14-4b7f-ad96-439d2a56605e
+# ╟─fcb71c81-8ee5-4cf7-b293-ab97261d7213
 # ╟─6adfae4d-5137-4692-b9f3-3793c4c76202
+# ╟─0cdb27f4-9796-479b-b43f-b349eaabc049
+# ╟─d91b478b-57fa-4f26-a05c-649097202102
 # ╟─f1512fc5-4a7a-4274-9d42-3057d9aec04f
 # ╟─2925fafa-4722-4335-ba49-77c6a8fb110b
-# ╠═e7e6884a-1145-4a01-a429-6c4a84e7ea33
+# ╟─e7e6884a-1145-4a01-a429-6c4a84e7ea33
 # ╟─68b33b39-5ef5-4560-b4b2-1fe2f43a3628
-# ╟─8a132aba-aa8a-428a-84a2-0ab6e5e2b891
+# ╠═8a132aba-aa8a-428a-84a2-0ab6e5e2b891
+# ╠═1eeee988-8af7-42f2-8d8c-a89402170f1a
 # ╟─821a7c95-f4da-410d-b780-111abb6d0db5
 # ╟─febd591e-bb9f-4b21-93c8-aafd4c81ce12
 # ╟─0044c49b-1c72-4f78-97ee-87932c97d2a9
 # ╟─b640fcd0-3e49-471d-b281-87137a781eba
 # ╟─7a00ce43-94e2-4f68-b651-b57bf7d6ab05
-# ╟─ecfd5449-29f6-452b-ae3d-d8e40932c8a0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -4,13 +4,13 @@ radial_distribution_statistics,DistributionStatistics,
 angular_distribution_statistics,plot_radial_distribution_statistics,
 generate_random_objs
 
-max_side(v) = maximum(side,v)
-max_area(v) = maximum(area,v)
-max_perimeter(v) = maximum(perimeter,v)
+max_side(v) = findmax(side,v)
+max_area(v) = findmax(area,v)
+max_perimeter(v) = findmax(perimeter,v)
 
-min_side(v) = minimum(side,v)
-min_area(v) = minimum(area,v)
-min_perimeter(v) = minimum(perimeter,v)
+min_side(v) = findmin(side,v)
+min_area(v) = findmin(area,v)
+min_perimeter(v) = findmin(perimeter,v)
 
 mean_side(v) = Statistics.mean(side,v)
 mean_area(v) = Statistics.mean(area,v)
@@ -46,7 +46,7 @@ Calculates statistics on `CentredObj`s vector:
 minimal, maximal, mean and standard deviation of sides,areas and perimeters of all `CentredObj`
 objects in the collection `v`.
 """
-CentredObjCollectionStat(v::Vector{C};nbins::Int=-1) where C<:CentredObj= begin
+    CentredObjCollectionStat(v::Vector{C};nbins::Int=-1) where C<:CentredObj= begin
             new{NamedTuple{(:side,:area,:perimeter)}}(length(v),
                 (max_side(v),max_area(v),max_perimeter(v)),
                 (min_side(v),min_area(v),min_perimeter(v)),
@@ -60,9 +60,9 @@ end
 function Base.show(io::IO,s::CentredObjCollectionStat)
     println(io,)
     println(io,"""Statistics summary on $(s.N) rois:
-                side = $(s.means.side) ±  $(s.stds.side) in range from $(s.mins.side) to  $(s.maxs.side)
-                area = $(s.means.area) ±  $(s.stds.area) in range from  $(s.mins.area) to  $(s.maxs.area)
-                perimeter = $(s.means.perimeter) ±  $(s.stds.perimeter) in range from  $(s.mins.perimeter) to  $(s.maxs.perimeter)
+                side = $(s.means.side) ±  $(s.stds.side) in range from $(s.mins.side[1]) to  $(s.maxs.side[1])
+                area = $(s.means.area) ±  $(s.stds.area) in range from  $(s.mins.area[1]) to  $(s.maxs.area[1])
+                perimeter = $(s.means.perimeter) ±  $(s.stds.perimeter) in range from  $(s.mins.perimeter[1]) to  $(s.maxs.perimeter[1])
     """)
 end
 

@@ -19,17 +19,19 @@ module ThermovisorImages
     """
     ThermovisorData is a package designed to process thermal images stored as matrices.
 Each  element of thermal image represents a temperature value. The package enables users to 
-load images from files, calculate temperature distributions, and compute statistical analyses
-for temperatures along specified lines. 
+load images from files, calculate temperature distributions, compute statistical analyses
+for temperatures along specified lines and recalculate the temperature by taking into account the 
+emissivity and spectral range of thermal imaging camera.  
     
     
-    Thermal image can be loaded using [`read_temperature_file`](@ref).
+Thermal image can be loaded using [`read_temperature_file`](@ref).
 User defined matrix can be wrapped in [`RescaledImage`](@ref) which simple maps the values to [0,1] interval. 
 After that, distinct areas (relative to their surroundings,like the most heated regions within
 the scene) can be fitted to regions of interest (ROIs) using [`fit_all_patterns`](@ref). 
 Temperature distribution along the specified lined within each ROI can be obtained, and average radial and
 There is also possible to evaluate the averaged statistics 
-over the fitted ROI's using [`CentredObjCollectionStat`](@ref).
+over the fitted ROI's using [`CentredObjCollectionStat`](@ref) and recalculate the temperature for a new emissivity value
+of the whole image or it's region using [`recalculate_with_new_emissivity!`](@ref)
     
     """    
     ThermovisorImages
@@ -140,15 +142,15 @@ function find_temperature_files(folder::AbstractString=default_images_folder[])
 
 Function recalculates all temperatures in `image` assuming the temperatures were measured 
 for the surface with emissivity `image_emissivity`; `new_emissivity` is a new value of  
-emissivity, `λ_left` and `λ_right` are left and right wavelength boundaries of thermovisor spectral
+emissivity, `λ_left` and `λ_right` are left and right wavelength boundaries of infrared camera spectral
 range in μm. If `is_in_kelvins` is false (default) all temperatures supposed to be in Celsius and 
 Kelvins otherwise.
  
-To find a new temperature value `T` the function solves the following a non-linear equation.
-
-If both λ_left and λ_right are not equal and none of them is `nothing`, the following equation is solved:
+To find a new temperature value `T` the function solves a non-linear equation. If both λ_left and
+λ_right are not equal and none of them is `nothing`, the following equation is solved:
 
 `new_emissivity` ⋅∫iᵦ(λ,T) = `image_emissivity` ⋅∫iᵦ(λ,Tₘ)
+
 Here `iᵦ` is the Planck spectral radiance, Tₘ is the measured temperature (value of pixel intensity).
 The integration is preformed over the `[λ_left,λ_right]` spectral range with the help of
 `band_power` function provied by the `PlanckFunctions` package. 

@@ -4,7 +4,7 @@ c_view,line_within_mask,along_line_distribution,
 within_mask_line_points_distribution,mean_within_mask,
 along_mask_line_distribution,radial_distribution
 """
-    `CentredObj` is a sort of region of interest (ROI) marker object with coordinates and dimentions. 
+    `CentredObj` is a sort of region of interest (ROI) marker object with coordinates and dimensions. 
 
 `CentredObj` has centre coordinates and dimensions, object's center can be 
 anywhere with respect to the image indices. ROI also has one or more size parameters (in pixels)
@@ -22,7 +22,7 @@ By default we have three `CentredObj` types in package:
 
 To impement `CentredObj` abstraction one needs to implement:
 
-[`side`](@ref) - returns what is assumed to be the single number characterisation of the dimentions (by default the maximum value of dimensions(c) is taken)
+[`side`](@ref) - returns what is assumed to be the single number characterisation of the dimensions (by default the maximum value of dimensions(c) is taken)
 
 [`area`](@ref) - returns the CentredObj area, used in statistics calculation and in default two objs compirason see [`isless(c1::CentredObj,c2::CentredObj)`](@ref)
 
@@ -389,7 +389,7 @@ end
 
 name(::SquareObj) = "Square"
 parnumber(::Type{SquareObj}) = 3
-area(c::SquareObj)=^(dimentions(c)[],2)
+area(c::SquareObj)=^(dimensions(c)[],2)
 side(c::SquareObj) = dimensions(c)[]
 perimeter(c::SquareObj) = 4*side(c)
 Base.size(c::SquareObj) = (side(c),side(c))
@@ -475,24 +475,25 @@ mutable struct RectangleObj <:CentredObj
 end
 name(::RectangleObj) = "Rectangle"
 parnumber(::Type{RectangleObj}) = 4
-area(c::RectangleObj)=*(side(c)...)
-perimeter(c::RectangleObj) = 2*sum(side(c))
-side(c::RectangleObj) = (c.dimensions[1],c.dimensions[2])
-Base.size(c::RectangleObj) = side(c)
+area(c::RectangleObj)=*(sides(c)...)
+perimeter(c::RectangleObj) = 2*sum(sides(c))
+sides(c::RectangleObj) = (c.dimensions[1],c.dimensions[2])
+side(c::RectangleObj) = maximum(sides(c))
+Base.size(c::RectangleObj) = sides(c)
 is_within(c::RectangleObj,inds::AbstractVector) = begin
-    (a,b) = side(c)
+    (a,b) = sides(c)
     a/=2
     b/=2
     c.center[1]-a<=inds[1]<=c.center[1]+a   && c.center[2]-b<=inds[2]<=c.center[2]+b
 end
 diagonal_points(c::RectangleObj) = begin
-    (a,b) = side(c)
+    (a,b) = sides(c)
     a=int_floor_fld(a,2) # corresponds to vertical size(row index)
     b=int_floor_fld(b,2) # horizontal side (column index)
     return (c.center[1]-a , c.center[2]-b, c.center[1]+a , c.center[2]+b)
 end
 rearranged_diagonal(c::RectangleObj) = begin
-    (a,b) = side(c)
+    (a,b) = sides(c)
     a=int_floor_fld(a,2)
     b=int_floor_fld(b,2)
     return (c.center[2]-b,c.center[1]-a , c.center[2]+b, c.center[1]+a )
@@ -511,11 +512,11 @@ function fill_x0!(x0,im_bin::FlagMatrix,::RectangleObj)
     x0 .= [collect(x/2 for x in Tuple.(max_ind + min_ind))...,starting_a,starting_b]
 end 
 function diag_ang(c::RectangleObj)
-    a,b = side(c)
+    a,b = sides(c)
     return atand(a/b)
 end
 function line_within_mask(c::RectangleObj,ang,line_length) 
-    b,a = side(c) # here we interchange the sides
+    b,a = sides(c) # here we interchange the sides
     ang %=360
     rect_ang = diag_ang(c)
     if ((90-rect_ang)<=ang<=(180-rect_ang)) || ((270-rect_ang)<=ang<=(360-rect_ang))
@@ -736,7 +737,10 @@ end
     radial_distribution(imag::AbstractMatrix,c::CentredObj,angles_range::AbstractRange,line_length;mm_per_pixel=1.0)
 
 Calls `along_mask_line_distribution` on lines oriented with some angles range and puts the resulting 
-distribution into one matrix j'th column of this matrix corresponds to the distribution along the line oriented with ang[j] angle
+distribution into one matrix j'th column of this matrix corresponds to the distribution along the 
+line oriented with ang[j] angle. The length of line is `line_length`, if it is less than 0.0 or greater 
+than the smallest dimension of `c`, than is is set to the smallest dimentsion of `c`
+
 """
 function radial_distribution(imag::AbstractMatrix,c::CentredObj,
                             angles_range::AbstractRange;line_length=0.0,

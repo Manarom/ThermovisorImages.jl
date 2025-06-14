@@ -76,7 +76,7 @@ function draw!(rgbim::Matrix{RGB{Float64}},
         ImageDraw.draw!(rgbim,convert_to_drawable(c,fill=fill,thickness=thickness), roi_color; kwargs...)
         
         if show_cross 
-            cross_length = int_floor(minimum(side(c))/3)
+            cross_length = int_floor(side(c)/3)
             if cross_length <5
                 cross_length = side(c)
             end
