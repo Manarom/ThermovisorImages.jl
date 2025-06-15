@@ -4,7 +4,7 @@
 ```
 
 
-Notebook file with `ThermovisorData-test.jl` usage examples are available at [Pluto notebooks](https://github.com/Manarom/ThermovisorData.jl/blob/main/notebooks).
+Notebook file with `ThermovisorImzges-test.jl` usage examples are available at [Pluto notebooks](https://github.com/Manarom/ThermovisorImages.jl/blob/main/notebooks).
 
 To run these notebooks, you need:
 1) Install `julia` language itself from its official [download page](https://julialang.org/downloads) 

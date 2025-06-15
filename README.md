@@ -4,44 +4,56 @@
 
 
 
-**ThervisorImages.jl** is a small package designed to process static thermal images stored as matrices. Each matrix element represents a temperature value. Package enables users to load images from csv-files or other common formats, calculate temperature distributions, and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circless, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
+**ThermovisorImages.jl** is designed to process static thermal images stored as matrices in CSV files or as image files. It treats each matrix element as a temperature value. ThermovisorImages.jl provides functions to calculate temperature distributions and perform statistical analyses of temperatures within Regions of Interest (ROIs), such as circles, squares, rectangles, or along lines. ROI objects can be fitted to image patterns (regions that stand out from the background). It is also possible to evaluate statistics across multiple ROIs, including distributions of side length, area, and perimeter.
 
-Image with ROI object, temperature distribution is evaluated along the inclined line
+**ThermovisorImages.jl** also provides functions to recalculate the temperature distribution of the entire image (or its part within the ROI or labeled pattern), taking into account the emissivity of the surface and the spectral range of the infrared camera.
+
+This package was designed to study the temperature distribution across the heated sample for the emissivity measuring facility described in this [`paper`](https://link.springer.com/article/10.1007/s00340-024-08331-9)
+
+The following figure shows the image with the ROI object on it:
 <p float="left">
   <img src="./assets/filtered_image_with_marker.png" /> 
 </p>
 
-The following figures show temperature distribution along the line, radial and angular distribution of all points within the ROI
+The following figures show temperature distribution along the inclined line, and radial and angular distribution of all points within the ROI
 <p float="left">
   <img src="./assets/line_distrib.png" width="220"/>
   <img src="./assets/radial_distrib.png" width="220"/>
   <img src="./assets/angular_distrib.png"  width="220"/> 
 </p>
-The following figures show (left) the initial image with several separate patterns and the same figure with several ROIs fitted to the patterns (righ)
+The following figures show the initial image with several separate patterns and the same figure with several ROIs fitted to the patterns and histogram of ROis distribution over the size parameter
 <p float="left">
   <img src="./assets/multiple_patterns_initial.png" width="220"/>
   <img src="./assets/multiple_patterns_fitted.png" width="220"/> 
   <img src="./assets/multiple_patterns_hist.png" width="220"/> 
 </p>
 
- Detailed explanation of this images is given in  [notebook] folder in [Pluto](https://plutojl.org/) notebook, which can be used as an example of package usage.
+ Main functionality of the package is demonstrated in the Pluto notebook [notebook](https://github.com/Manarom/ThermovisorImages.jl/blob/main/notebooks).
 
+Static version of this notebook is available at <a href="./docs/build/ThermovisorImages-test.html">ThermpvisorImages-test</a>
 
   Full documentation is available at  [documentation](https://manarom.github.io/ThermovisorImages.jl/)
 
-## Quick start
+## Installation
 
+1) Install [`julia`](https://julialang.org/install/)
 
 #### For usage
 
-2a) Clone this repository to your local machine 
+2) Clone this repository to your local machine in `project_folder` (any name)
 
-3a) use `include("thermovisor_data_folder\src\ThermovisorImages.jl)` in REPL or other module's to bring ThermovisorData module to the global scope
+3) In julia REPL type the following:
 
-4a) use `using .ThermovisorImages` to bring the module and its content to the corresponding namespace
+```julia
+  import Pkg
+  cd(project_folder) # sets working folder to project_folder
+  Pkg.activate(".")
+  include(".\\src\\ThermovisorImages.jl")
+  using .ThermovisorImages #to bring the module and its content to the corresponding namespace
+```
 
 #### For development
 
-2c) Clone this repository to `username/.julia/dev/`.
+2) Clone this repository to `username/.julia/dev/`.
 
-3c) Enter the package manager in REPL by pressing `]`  then add the package by typing `dev ThermovisorImages`
+3) Enter the package manager in REPL by pressing `]`  then add the package by typing `dev ThermovisorImages`

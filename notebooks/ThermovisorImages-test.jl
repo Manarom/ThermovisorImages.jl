@@ -23,11 +23,9 @@ using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,Fi
 md"""
 ### `ThermovisorImages.jl`
 ---------------------
-**ThermovisorImages.jl** is designed to process static thermal images stored as matrices in csv-files or in image format. It considers each matrix element representing a temperature value. `ThermovisorImages.jl` provides functions to calculate temperature distributions and compute statistical analyses for temperatures within Regions of Interest (ROIs) such as circles, squares, and rectangles or along lines. ROI objects can be fitted to thermally distinct areas (regions that stand out from the background). It is also possible to evaluate statistics on multiple ROIs like side, area and perimeter distributions.
+**ThermovisorImages.jl** is designed to process static thermal images stored as matrices in CSV files or as image files. It treats each matrix element as a temperature value. ThermovisorImages.jl provides functions to calculate temperature distributions and perform statistical analyses of temperatures within Regions of Interest (ROIs), such as circles, squares, rectangles, or along lines. ROI objects can be fitted to image patterns (regions that stand out from the background). It is also possible to evaluate statistics across multiple ROIs, including distributions of side length, area, and perimeter.
 
-**ThermovisorImages.jl**  also provides functions to recalculate the temperature distribution of the whole image (or it's part within the ROI or labeled pattern) taking into account the emissivity of the surface and infrared camera spectral range. 
-
-This package was designed to study the temperature distribution across the heated sample for the emissivity measuring facility described in this [`paper`](https://link.springer.com/article/10.1007/s00340-024-08331-9)
+**ThermovisorImages.jl** also provides functions to recalculate the temperature distribution of the entire image (or its part within the ROI or labeled pattern), taking into account the emissivity of the surface and the spectral range of the infrared camera.
 
 """
 
@@ -219,7 +217,7 @@ end
 # ╔═╡ 5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
 md"""
 ### 3,4. Finding patterns and filtering the image
-After loading from file, the image is stored as **`RescaledImage`** object, a wrapper struct, which holds both initial image and image with temperatures, normalized to one. To find and label image features **`marker_image`** function is used.
+After loading from file, the image is stored as **`RescaledImage`** object, a wrapper struct, which holds both the initial image and the image with temperatures, normalized to one. To find and label image features **`marker_image`** function is used.
 
 ```julia
 	marker_image(rescaled::RescaledImage;
@@ -633,15 +631,14 @@ begin
 	end
 end;
 
-# ╔═╡ 1eeee988-8af7-42f2-8d8c-a89402170f1a
-md""" 
-### 9. Recalculation of the temperature field of the surface and the area of interest with a new value of emissivity
-
+# ╔═╡ f357bbd8-4d81-4f9e-870e-cf57124c5042
+md"""
+The following blocks show the same usage as the previous one, with an axception that it analyzes standard image files.  
 """
 
 # ╔═╡ 821a7c95-f4da-410d-b780-111abb6d0db5
 md"""
-	Show/hide rois $(@bind is_draw_rois Select( ["show" ;"hide" ]))
+	Show/hide fitted rois $(@bind is_draw_rois Select( ["show" ;"hide" ],default = :hide))
 	"""
 
 # ╔═╡ febd591e-bb9f-4b21-93c8-aafd4c81ce12
@@ -654,7 +651,7 @@ begin
 	markers_coins = ThermovisorImages.marker_image(rescaled_coin)
 	im_coin_float = rescaled_coin.im
 	fitted_rois_coins = ThermovisorImages.fit_all_patterns(rescaled_coin,multifit_roi_type)
-end
+end;
 
 # ╔═╡ 0044c49b-1c72-4f78-97ee-87932c97d2a9
 begin
@@ -673,13 +670,48 @@ end
 # ╔═╡ b640fcd0-3e49-471d-b281-87137a781eba
 begin 
 	test_markers = ThermovisorImages.marker_image(rescaled_coin)
-	before_sorting = simshow(test_markers.markers)
+	before_sorting = ThermovisorImages.draw(Float64.(test_markers.markers))
 	ThermovisorImages.sort_markers!(test_markers)
-	after_sorting = simshow(test_markers.markers)
+	after_sorting = ThermovisorImages.draw(Float64.(test_markers.markers))
 end;
+
+# ╔═╡ 8b2fdcf1-cd0e-4234-a24a-afa597552f9e
+md""" After labeling patterns (without fitting the ROIs), labels in `MarkeredImage` can be sorted by their area. Each pattern is assigned an integer label according to the internal logic of the labeling algorithm. In some cases, it may be useful to sort the labels by the size of the patterns, for example, before ROI fitting, when the number of ROIs is limited to a value smaller than the total number of patterns.  
+
+```julia
+markered_image = marker_image(rescaled_image)# markers are not ordered   
+sort_markers!(markered_image) # now,the pattern with index `1` has the largest area 
+rois = [SquareObj for _ in 1:5] # five empty squares
+fit_all_patterns!(rois,markered_image) # now five largeest pattern are fitted
+```
+"""
+
+# ╔═╡ 054b15d8-a4e6-42d4-b097-938d05cbb198
+md"Markered image before (left) and after (right) sorting features by their area (the brighter the color, the higher the label of the pattern)" 
 
 # ╔═╡ 7a00ce43-94e2-4f68-b651-b57bf7d6ab05
 hcat(before_sorting,after_sorting)
+
+# ╔═╡ 20cf3079-1115-451b-870d-2457a5cfd333
+md""" 
+### 9. Recalculation of the temperature field of the surface and the area of interest with a new value of emissivity
+
+```julia
+recalculate_with_new_emissivity!(image::AbstractArray,new_emissivity::Float64,
+                                        image_emissivity::Float64;
+                                        λ_left::Union{Float64,Nothing}=14.0,
+                                        λ_right::Union{Float64,Nothing}=14.5,
+                                        is_in_kelvins::Bool=false,
+                                        rel_tol::Float64=1e-3) # (1)
+recalculate_with_new_emissivity!(image::AbstractArray,c::CentredObj,
+									new_emissivity::Float64, image_emissivity::Float64;
+									kwargs...) # (2)
+recalculate_with_new_emissivity!(image::AbstractArray,marker::MarkeredImage,
+        								label::Int,new_emissivity::Float64,
+										image_emissivity::Float64;
+										kwargs...) # (3)
+```
+"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2928,16 +2960,16 @@ version = "1.8.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═4460f260-f65f-446d-802c-f2197f4d6b27
+# ╟─4460f260-f65f-446d-802c-f2197f4d6b27
 # ╟─79b31b84-afe0-4aac-90bf-97e8cbfff5e2
-# ╠═2c5e6e4c-92af-4991-842a-7e5bdc55a46d
+# ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
 # ╟─fc6af4b0-1127-11f0-1b66-a59d87c5b141
 # ╟─051044c5-760c-4b60-90fc-82a347c3b6bc
 # ╟─4f93b7ba-3488-446d-8043-718fbdc5b808
 # ╟─215ed2f4-71ba-4cb5-b198-677d0d7ffb38
 # ╟─f6c1be87-94d2-4b08-a52d-6eb637192ee8
 # ╟─870113c3-b439-4d34-90d8-fdd8a158f9dd
-# ╠═dd4a9e93-0d4e-497a-8ca4-0e8f36205ffb
+# ╟─dd4a9e93-0d4e-497a-8ca4-0e8f36205ffb
 # ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
 # ╟─cd12d201-3dac-48c7-bd53-7c76944f5816
 # ╟─9fe323c0-9afc-43fd-bc21-1c45b73d50e0
@@ -2945,7 +2977,7 @@ version = "1.8.1+0"
 # ╟─429cf33f-4422-44f0-beb8-5a1908a72273
 # ╟─7f5ec486-40d7-4e7d-9ad8-4740a1b0be22
 # ╟─13f01881-2645-429b-9856-6c3f19c0ad48
-# ╟─854731c1-7a34-4066-aa74-01629c87d75d
+# ╠═854731c1-7a34-4066-aa74-01629c87d75d
 # ╟─aab55f93-1f3e-4d43-b54c-4143d6a8428d
 # ╟─46e42b10-1213-48f8-a614-38c1ff86566c
 # ╠═fd30f772-f6bc-4716-982e-e9c7fd5d5e97
@@ -3001,12 +3033,15 @@ version = "1.8.1+0"
 # ╟─2925fafa-4722-4335-ba49-77c6a8fb110b
 # ╟─e7e6884a-1145-4a01-a429-6c4a84e7ea33
 # ╟─68b33b39-5ef5-4560-b4b2-1fe2f43a3628
-# ╠═8a132aba-aa8a-428a-84a2-0ab6e5e2b891
-# ╠═1eeee988-8af7-42f2-8d8c-a89402170f1a
+# ╟─8a132aba-aa8a-428a-84a2-0ab6e5e2b891
+# ╟─f357bbd8-4d81-4f9e-870e-cf57124c5042
 # ╟─821a7c95-f4da-410d-b780-111abb6d0db5
 # ╟─febd591e-bb9f-4b21-93c8-aafd4c81ce12
 # ╟─0044c49b-1c72-4f78-97ee-87932c97d2a9
-# ╟─b640fcd0-3e49-471d-b281-87137a781eba
+# ╠═b640fcd0-3e49-471d-b281-87137a781eba
+# ╟─8b2fdcf1-cd0e-4234-a24a-afa597552f9e
+# ╟─054b15d8-a4e6-42d4-b097-938d05cbb198
 # ╟─7a00ce43-94e2-4f68-b651-b57bf7d6ab05
+# ╠═20cf3079-1115-451b-870d-2457a5cfd333
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
