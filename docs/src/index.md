@@ -1,14 +1,16 @@
 
-# ThermovisorData.jl
+# ThermovisorImages.jl
 
 ## General description
 
-**ThervisorData.jl** is a small package designed to process static thermal images stored as matrices in CSV format, where each matrix element represents a temperature value. It enables users to load images from files, calculate temperature distributions, and compute statistical analyses for temperatures along specified lines. It also calculates averaged angular and radial temperature distributions (along with standard deviations) within Regions of Interest (ROIs) such as circles, squares, and rectangles. These ROI objects can be fitted to thermally distinct areas (relative to their surroundings), such as the most heated regions within the scene.
+**ThermovisorImages.jl** is designed to process static thermal images stored as matrices in CSV files or as image files. It treats each matrix element as a temperature value. ThermovisorImages.jl provides functions to calculate temperature distributions and perform statistical analyses of temperatures within Regions of Interest (ROIs), such as circles, squares, rectangles, or along lines. ROI objects can be fitted to image patterns (regions that stand out from the background). It is also possible to evaluate statistics across multiple ROIs, including distributions of side length, area, and perimeter.
+
+**ThermovisorImages.jl** also provides functions to recalculate the temperature distribution of the entire image (or its part within the ROI or labeled pattern), taking into account the emissivity of the surface and the spectral range of the infrared camera.
 
 
 ## Contact
 
-To contact me, please do it through the [GitHub repository](https://github.com/Manarom/ThermovisorData.jl).
+Contacts [GitHub repository](https://github.com/Manarom/ThermovisorImages.jl).
 
 ## License
 

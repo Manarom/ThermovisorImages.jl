@@ -1,6 +1,6 @@
-using ThermovisorData
+using ThermovisorImages
 using Test
 
-@testset "ThermovisorData.jl" begin
+@testset "ThermovisorImages.jl" begin
     # Write your tests here.
 end

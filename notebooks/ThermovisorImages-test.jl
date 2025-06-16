@@ -1,8 +1,846 @@
+### A Pluto.jl notebook ###
+# v0.20.6
+
+using Markdown
+using InteractiveUtils
+
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    #! format: off
+    return quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+    #! format: on
+end
+
+# ╔═╡ 051044c5-760c-4b60-90fc-82a347c3b6bc
+using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO,Optim,CSV,Colors,ColorVectorSpace,Distributions,ColorSchemes,StaticArrays,Interpolations,FileTypes,ImageDraw,StatsBase,PlanckFunctions
+
+# ╔═╡ 4460f260-f65f-446d-802c-f2197f4d6b27
+md"""
+### `ThermovisorImages.jl`
+---------------------
+**ThermovisorImages.jl** is designed to process static thermal images stored as matrices in CSV files or as image files. It treats each matrix element as a temperature value. ThermovisorImages.jl provides functions to calculate temperature distributions and perform statistical analyses of temperatures within Regions of Interest (ROIs), such as circles, squares, rectangles, or along lines. ROI objects can be fitted to image patterns (regions that stand out from the background). It is also possible to evaluate statistics across multiple ROIs, including distributions of side length, area, and perimeter.
+
+**ThermovisorImages.jl** also provides functions to recalculate the temperature distribution of the entire image (or its part within the ROI or labeled pattern), taking into account the emissivity of the surface and the spectral range of the infrared camera.
+
+"""
+
+# ╔═╡ 79b31b84-afe0-4aac-90bf-97e8cbfff5e2
+PlutoUI.TableOfContents()
+
+# ╔═╡ 2c5e6e4c-92af-4991-842a-7e5bdc55a46d
+md"""
+###### This notebooks describes the following operations:
+
+*  1. Loading image
+*  2. Creating `CentredObj` marker (ROI object)
+*  3. Finding patterns
+*  4. Filtering the image
+*  5. Fitting marker position and size to the pattern
+*  6. Evaluating radial and angular temperature distributions
+*  7. Fitting multiple ROIs to image with many patterns
+*  8. Fitted ROIs spatial properties statistics
+*  9. Recalculation of the temperature field of the surface and the area of interest with a new value of emissivity
+"""
+
+# ╔═╡ fc6af4b0-1127-11f0-1b66-a59d87c5b141
+begin# we need the project structrue inside the notebook
+	notebook_path = @__DIR__()# this notebook local path
+	project_path = abspath(joinpath(notebook_path,".."))#project's path
+	#import Pkg
+	#Pkg.activate(project_path)
+	sources_path = joinpath(project_path,"src")# it is supposed that sources are in separate folder \project_folder\src\
+	assets_folder = joinpath(project_path,"assets")
+	images_folder = joinpath(project_path,"thermal images")
+end;
+
+# ╔═╡ f6c1be87-94d2-4b08-a52d-6eb637192ee8
+begin 
+	includet(joinpath(sources_path,"ThermovisorImages.jl"))
+# include(joinpath(sources_path,"ThermovisorData.jl")) #replace includet with include if Revise is not needed
+	using Main.ThermovisorImages
+end
+
+# ╔═╡ 4f93b7ba-3488-446d-8043-718fbdc5b808
+import Gtk
+
+# ╔═╡ 215ed2f4-71ba-4cb5-b198-677d0d7ffb38
+md" default image saving folder $(@bind image_save_folder PlutoUI.TextField(default = assets_folder))"
+
+# ╔═╡ 870113c3-b439-4d34-90d8-fdd8a158f9dd
+md"""
+### 1. Loading image
+
+
+All examples of temperature distribution images from real application are in 
+`"...project_folder\thermal images\ "` folder. All thermal images are in csv - format
+
+Function 
+```
+	ThermovisorImages.find_temperature_files(images_folder)
+``` 
+returns `Dict` with thermovisor data file labels matched to the full file names and actual measurements temperatures. This works simple by parsing the name of the file, to be parsed as thermal image file it's name should be like :
+"any-name-T567.csv" . This file is automatically interpreted as a thermal image recorded for the temperature T = 567, here all numbers after the "T" symbol are interpreted as the temperature value.
+
+Function 
+```julia
+	read_temperature_file(file_name;
+							inverse_intensity::Bool=false,
+							color_scheme::Symbol=:none)
+``` 
+can be used to read both CSV-files and images,keyword argument `color_scheme` can be used to provide the color scheme (which should be one of `ColorSheme.coloscheme` keys) to decode RGB colors to Float64 values (temperatures), by default `Gray` function is used.
+
+"""
+
+# ╔═╡ cd12d201-3dac-48c7-bd53-7c76944f5816
+md"""
+	Select this check-box to load the local file using GTK dialog box.
+	$(@bind add_file PlutoUI.CheckBox(default=false))
+	"""
+
+# ╔═╡ 9fe323c0-9afc-43fd-bc21-1c45b73d50e0
+md"""Set the temperature of file to be loaded $(@bind add_file_temperature PlutoUI.NumberField(0:3000,default=305))"""
+
+# ╔═╡ dd4a9e93-0d4e-497a-8ca4-0e8f36205ffb
+begin 
+	files_in_dir = ThermovisorImages.find_temperature_files(images_folder)
+	if add_file
+		add_file_fullname = Gtk.open_dialog("select file")
+		add_file_name = splitpath(add_file_fullname)[end]
+		push!(files_in_dir, add_file_name=> add_file_temperature=>add_file_fullname)
+	end
+	
+	files_in_dir_tags = keys(files_in_dir)
+end
+
+# ╔═╡ 43a1fb58-cd5e-4634-8770-0ff1809b2191
+@bind temp_to_load Select([v for v in files_in_dir_tags])
+
+# ╔═╡ 794ebd5e-e9e0-4772-98a9-43e20c7ef4da
+#reading selected file
+begin 
+	rescaled_image = ThermovisorImages.read_temperature_file(files_in_dir[temp_to_load][2])
+end;
+
+# ╔═╡ 429cf33f-4422-44f0-beb8-5a1908a72273
+md"""
+### 2.Creating `CentredObj` marker
+
+`CentredObj` acts as a region of interest (ROI), it has independent (from the image) coordinates and size, thus it can be used to scan the image and monitor it's values. `CentredObj`s can be of different shapes viz circle, rectangle and square. The package provides simple interface to configure custom ROI objects. 
+
+Universal constructor allows one to create `CentredObj`s:
+```julia
+	obj_from_vect(::Type{T},v::AbstractVector) where T<:CentredObj
+```
+Here, first argument is the type of object (**`CircleObj`**, **`SquareObj`** or **`RectangleObj`**), **`v`** is the vector of parameters, first two elements of `v` are centre coordinates other are dimentions, e.g. square ROI centred at (100,120) with side length 50 can be construted by calling:
+
+```julia
+	square=obj_from_vect(SquareObj,[100,120,50])
+```
+To convert internal image format to the drawable RGB matrices there is a **`draw`** function, it is also possible to draw the image together with the **`CentredObj`** on it.
+To convert images to RGB schemes from **`ColorShemes.jl`** package are used. 
+```julia
+	img # RescaledIMage or Matrix{Float64}
+	rgb_img = ThermovisorImages.draw(img,color_scheme=:inferno)# converts to RGB
+	ThermovisorImages.draw!(rgb_img,SquareObj((100,120),50)) # adds the square in image
+	rgb_img = ThermovisorImages.draw(img,c::CentredObj,color_scheme=:inferno)# draws both image and ROI at once
+```
+"""
+
+# ╔═╡ 7f5ec486-40d7-4e7d-9ad8-4740a1b0be22
+md"""
+Select marker type, 
+
+adjust it's centre coordinates and dimentions, 
+
+use sliders to move the ROI over the image:	
+
+marker type = $(@bind test_mask_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) \
+center point row index = $(@bind test_mask_center_x Slider(1:1000,default=200,show_value=true)) \
+center point column index = $(@bind test_mask_center_y Slider(1:1000,default=200,show_value=true)) \
+side a= $(@bind test_side_a Slider(1:1000,default=150,show_value=true)) 
+side b= $(@bind test_side_b Slider(1:1000,default=100,show_value=true))
+"""
+
+# ╔═╡ 854731c1-7a34-4066-aa74-01629c87d75d
+begin
+
+	mm_per_pixel = Ref(0.8); # this is used to calibrate the image dimentions 
+	test_coord_vect = [test_mask_center_x,test_mask_center_y,test_side_a]
+	if test_mask_type==RectangleObj
+		append!(test_coord_vect,test_side_b)
+	end
+	test_centre_obj = ThermovisorImages.obj_from_vect(test_mask_type,test_coord_vect)
+	rgb_image_initial = ThermovisorImages.draw(rescaled_image,test_centre_obj,show_cross = true,fill=false)
+	#imag_initial_show = ThermovisorImages.draw_line_within_mask!(rgb_image_initial,test_centre_obj,0,10)
+end
+
+# ╔═╡ 13f01881-2645-429b-9856-6c3f19c0ad48
+md"""
+The following block evaluates the average and standart deviation of temperature within the ROI 
+
+Average temperature within the marker <T>=$(ThermovisorImages.mean_within_mask(rescaled_image.initial,test_centre_obj)) 
+
+Standat deviation of average std(T) = $(ThermovisorImages.std_within_mask(rescaled_image.initial,test_centre_obj))
+"""
+
+# ╔═╡ aab55f93-1f3e-4d43-b54c-4143d6a8428d
+test_centre_obj
+
+# ╔═╡ 46e42b10-1213-48f8-a614-38c1ff86566c
+md"""
+`CentredObj` can also be used directly for indexing
+
+```julia
+	image[centred_obj] # returns vector of all values within the centred object
+	image[centred_obj] = 10.0 # sets all pixels within the centred_obj to the same 								value
+```
+"""
+
+# ╔═╡ fd30f772-f6bc-4716-982e-e9c7fd5d5e97
+plot(rescaled_image.initial[test_centre_obj],ylabel="Temperature",label=nothing)
+
+# ╔═╡ 9f55febb-b047-4b22-8575-209d45354d51
+md" Export image to file $(@bind save_image CheckBox(default = false))"
+
+# ╔═╡ 4feea216-ee48-42a3-b4ba-454f28ff690a
+begin
+	if save_image 		
+		FileIO.save(joinpath(image_save_folder,"initial_image.png"), rgb_image_initial)
+	end
+end
+
+# ╔═╡ 5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
+md"""
+### 3,4. Finding patterns and filtering the image
+After loading from file, the image is stored as **`RescaledImage`** object, a wrapper struct, which holds both the initial image and the image with temperatures, normalized to one. To find and label image features **`marker_image`** function is used.
+
+```julia
+	marker_image(rescaled::RescaledImage;
+            level_threshold::Float64=-1.0,
+            distance_threshold::Float64=-15.0)
+```
+This function performs several operations using **`Images.jl`** package:
+
+*  1.Binarization
+*  2.Distance transform
+*  3.Labeling 
+*  5.Watershed
+
+By default (if level_threshold is outside of the 0...1 range) Otsu algorithm is used to binarize the image.  It returns a **`MarkeredImage`** type object, which stores in **markers** field the matrix of labels - matrix of the same size as the initial image, but with integer values. In this matrix each pattern has individual integer value. **`MarkeredImage`** also stores the coordinates of each pattern.  
+"""
+
+# ╔═╡ 1644d6a3-8f11-4ca2-8613-b9e1d4896af0
+md"""
+To play with binarization adjust the following options:
+
+level threshold $(@bind level_threshold Slider(vcat(-1.0,collect(0.0:1e-2:1)),default=-1,show_value=true))
+
+distance threshold $(@bind distance_threshold Slider(-20.0:1.0:20,default=-15.0,show_value=true))
+
+ The following figure shows the image of markers matrix for different binarization options. 
+"""
+
+# ╔═╡ c12addac-2880-4758-b560-42db2941a77c
+begin 	
+	toy_markered =ThermovisorImages.marker_image(rescaled_image,level_threshold=level_threshold,distance_threshold=distance_threshold) 
+	ThermovisorImages.draw(Float64.(toy_markered.markers))
+end
+
+# ╔═╡ 3ae0c3df-7b50-4b74-b802-71931731753a
+md" Number of patterns $(length(toy_markered))"
+
+# ╔═╡ dde0003d-0fe3-41da-a582-27f88a57d2c5
+md"""
+There are several methods for **`filter_image`** function. 
+After labeling, by default it takes the last label (maximum label value), but label value could be provided externally with a corresponding keyword **label**
+If the `CentredObj` is provided as a second input argument filtering just removes all elements of the initial image which are not within the **`CentredObj`**.
+Some methods of filter_image function:
+```julia
+	filter_image(imag::RescaledImage;label::Int=1) # filters by pattern label
+	filter_image(imag::RescaledImage,c::CentredObj) # filters by roi
+	filter_image(imag::RescaledImage,markers::MarkeredImage;label::Int=1) # filters by specifying the label in the markers obj
+```
+"""
+
+# ╔═╡ 3fbc6b45-974e-430e-a4e6-960323015e74
+md""" 
+
+Show filtered image = $(@bind filter_init_image CheckBox(default=true))
+
+filter by $(@bind filter_by_option Select(["CentredObj", "Pattern"]))
+
+Show image reduced to pattern/roi size $(@bind is_show_filtered_reduced CheckBox(default=true))
+
+"""
+
+# ╔═╡ ca5eea20-2bb3-4407-aa09-af8de2332b84
+md"##### Filtered image:"
+
+# ╔═╡ 8b6f604d-157b-42cd-a0c6-8bd5562b47ef
+begin 
+	if filter_init_image
+		# filtering the image
+		if filter_by_option=="CentredObj"
+			filtered_by_obj = ThermovisorImages.filter_image(rescaled_image,test_centre_obj)
+		else
+			filtered_by_obj = ThermovisorImages.filter_image(rescaled_image)
+		end
+		h2 = ThermovisorImages.draw(filtered_by_obj,draw_reduced=is_show_filtered_reduced) 
+	end
+end
+
+# ╔═╡ 38a45961-0ffb-43d4-aa24-36d503ed4618
+md"Save the current heatmap $(@bind save_distr CheckBox(default=false))"
+
+# ╔═╡ 1467b184-22ac-4038-ad1b-f084d4443b27
+save_distr ? savefig(joinpath(notebook_path,"heatmap.png")) : nothing
+
+# ╔═╡ c87a830a-f48a-4444-81bc-3efd69a130ad
+md"""
+
+###  5,6. Evaluating radial and angular temperature distributions within the ROI
+------------------------
+Temperature distribution along the line, which goes through the ROI's centre within the ROI, can be obtained by calling 
+
+```julia
+	along_mask_line_distribution(imag::AbstractMatrix,c::CentredObj,direction_angle=0.0,line_length=10.0;length_per_pixel=1.0,use_wu::Bool=false)
+```
+It return three vectors:  along line coordinate, along line values and along line points coordinates in **`image`**, **`direction_angle`** is the rotation angle of line which goes through the center of roi and  **`line_length`** is the length of this line, additionaly, keyword argument  **`length_per_pixel`** can be provided to convert the coordinates from pixels to appropriate units.
+
+"""
+
+# ╔═╡ 6d37916c-7895-49d3-b8a3-c8661050ebcb
+md"""
+There are two algorithms available to obtain the line points within the image viz **`bresenham`** (default) and **`xiaolin_wu`**. Both were taken from the **`ImageDraw`** package. **`xiaolin_wu`** algorithm produces two coordinates for every point along the line, and the resulting temperature for each position is calculated as the average of temperatures for these two points. 
+
+Try Xiaolin-Wu algorithm? $(@bind is_use_wu CheckBox(default=false))
+
+"""
+
+# ╔═╡ 6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
+md"mm per pixel calibration value = $(mm_per_pixel[])"
+
+# ╔═╡ c67290fc-6291-4f3e-a660-a3c4afa3a5e3
+md"""
+	Creating mask object:
+	image type = $(@bind image_type Select(["filtered", "filtered full","not filtered"])) \
+	ROI type = $(@bind mask_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) \
+	center point x= $(@bind mask_center_x Slider(1:1000,default=200,show_value=true)) \
+	center point y= $(@bind mask_center_y Slider(1:1000,default=200,show_value=true)) \
+	side a= $(@bind side_a Slider(1:1000,default=150,show_value=true)) \
+	side b= $(@bind side_b Slider(1:1000,default=150,show_value=true))
+
+	"""
+
+# ╔═╡ 71eb240a-5a45-4bf3-b35c-a5820ca6da6c
+md" Fit the ROI to image $(@bind is_fit_mask CheckBox(false))"
+
+# ╔═╡ 4e1a5050-59b0-4d24-98bb-1520c06b28c5
+begin 
+	coord_vect = [mask_center_y,mask_center_x,side_a]
+	if mask_type==RectangleObj
+		append!(coord_vect,side_b)
+	end
+	centre_obj = ThermovisorImages.obj_from_vect(mask_type,coord_vect)
+	#is_make_obj_selfy ? centre_obj_image = draw(centre_obj,thickness=25) : nothing
+end
+
+# ╔═╡ 768535e0-a514-4dff-ac8b-0d7ca126149c
+# fitting the loaded image
+begin 
+	filtered_by_markers = filter_image(rescaled_image,marker_image(rescaled_image))
+	fitted_obj = ThermovisorImages.copyobj(centre_obj)	
+	if image_type=="filtered"
+		image_to_show = ThermovisorImages.reduced_image(filtered_by_markers)
+	elseif image_type =="not filtered"
+		image_to_show = rescaled_image.initial
+	else # full filtered
+		image_to_show = filtered_by_markers.full.initial
+	end
+	if is_fit_mask 
+		fit_centred_obj!(fitted_obj,filtered_by_markers, image_type=="filtered") 
+		fitted_obj
+		mm_per_pixel[]=sqrt((0.25π*25^2)/ThermovisorImages.area(fitted_obj))
+	else
+		mm_per_pixel[]=1.0
+	end
+end;
+
+# ╔═╡ 5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
+fitted_obj
+
+# ╔═╡ e1ccfd33-3d54-4249-86f1-381a1ef90615
+md"""
+Upper figure shows the image, ROI and inclined line which goes through ROI's center. By adjusting ROI position, the orientation and the length of this line temperature distribution of some feature can be studied. \
+ 	direction angle in degrees = $(@bind direction_angle Slider(0:1:360,show_value=true,default=45)) \
+	line length in $(is_fit_mask ? "mm" : "pixels" )= $(@bind line_length Slider(0.1:0.1:250,show_value=true,default=100))
+"""
+
+# ╔═╡ 42a7b186-aa04-4249-a129-bf925f181008
+begin
+	rgb_image = ThermovisorImages.draw(image_to_show,fitted_obj,show_cross = true)
+	imag = ThermovisorImages.draw_line_within_mask!(rgb_image,fitted_obj,direction_angle,line_length/mm_per_pixel[])
+end
+
+# ╔═╡ b096c4f2-9dce-409d-874a-a851f577bf92
+begin 
+	#ThermovisorData.diag_ang(fitted_obj)
+	(along_line_length,distrib,line_points) = ThermovisorImages.along_mask_line_distribution(image_to_show,fitted_obj,direction_angle,line_length,use_wu=is_use_wu,length_per_pixel=mm_per_pixel[])
+	#@show length(points)
+	
+	pl_distrib=ThermovisorImages.plot_along_line_distribution(along_line_length,distrib,is_centered = true)
+	#pl_distrib
+end
+
+# ╔═╡ 59f9a7f2-9601-431c-a897-543fa25c64c4
+fitted_obj
+
+# ╔═╡ 39e50296-21ff-4407-894f-2a380dc51e21
+begin 
+		new_line =line_length# minimum(side(fitted_obj))-5
+		ang_range = 0.0:1:180 # range of angles 
+		(R,D) = ThermovisorImages.radial_distribution(image_to_show,fitted_obj,ang_range,line_length=new_line,length_per_pixel=mm_per_pixel[])
+
+		DS = ThermovisorImages.radial_distribution_statistics(R,D)
+
+		p_radial = ThermovisorImages.plot_radial_distribution_statistics(DS,show_lower_bound=true,show_upper_bound=true,probability=0.99)
+
+			angs = collect(ang_range)
+	angular_DS = ThermovisorImages.angular_distribution_statistics(angs,R,D)
+	
+	p_angular = ThermovisorImages.plot_angular_distribution_statistics(angular_DS)
+end;
+
+# ╔═╡ 32848d3c-866b-4a6e-be07-ff6aae73d754
+md"""
+It is also possible to evaluate the statistics on radial and angular distribution of image points within the ROI object.
+Function 
+```julia
+(R,D) = radial_distribution(imag::AbstractMatrix,c::CentredObj,angles_range::AbstractRange; line_length=0.0,length_per_pixel=1.0,use_wu::Bool=false)
+```
+Evaluates the radial distribution, of the  **`image`** points within the object **`c`** of **`CentredObj`** subtype, **`angles_range`** is the range angles, **`line_length`** is the length of the line, **`length_per_pixel`** can be used to convert the along line coordinates from pixels to some real units. Function returns a vector **`R`** of coordinates along the line, **`D`** is the matrix, each column corresponds to the values of temperature for a particular angle in the input range.
+
+After calculating the radial distribution; statistics on radial and angular  distribution can be evaluated by calling:
+
+```julia
+	DS_radial = radial_distribution_statistics(along_length_coordinate,
+        distrib)
+	DS_angular = angular_distribution_statistics(angles,along_length_coordinate,distrib)
+```
+These functions evaluate averaged over the angle and line length
+"""
+
+# ╔═╡ ea232c80-261b-4dc2-8891-2b7090f36760
+p_radial
+
+# ╔═╡ 8a558860-00d8-4f87-b900-4620881ade90
+p_angular
+
+# ╔═╡ e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
+md"Save image with marker and temperature distributions $(@bind save_average_radial_distribution CheckBox(default=false))"
+
+
+# ╔═╡ b4ce12e3-29ec-41ac-89d3-06d08ef2beca
+begin 
+	if save_average_radial_distribution  	
+		FileIO.save(joinpath(assets_folder,"filtered_image_with_marker.png"),imag)
+		savefig(pl_distrib,joinpath(assets_folder,"line_distrib.png"))
+		savefig(p_radial,joinpath(assets_folder,"radial_distrib.png"))
+		savefig(p_angular,joinpath(assets_folder,"angular_distrib.png"))
+	end
+end;
+
+# ╔═╡ cc909b53-ed4d-44a1-a410-ff25533afc2d
+md"""
+###  7,8. Fitting multiple ROI objects to the image with several temperature features
+
+This section goes through the creation of the image with multiple randomly distributed  patterns and fitting a vector of  `CentredObj` ROIs.
+
+First, create several  ROIs, this can be done by calling special function
+```julia
+	generate_random_objs(::Type{T},centers_range::NTuple{2,R},obj_number::Int,dimension_range::R) where {T<:CentredObj,R<:StepRange{Int,Int}}
+```
+This functions returns a Vector of `obj_number` randomly distributed in space ROIs of predefined type, `centers_range` and `dimension_range` arguments allows to provide StepRanges to set the range of ROIs centres and dimensions variation. After generating ROIs they can be placed in matrix of float by indexing. The following code places ten randome rois in the matrix. 
+```julia
+	im = fill(0.0,100,200)
+	rois = generate_random_objs(SquareObj,(20:80,1:200),10,20:1:30)
+	for r in rois
+		im[r]=1.0
+	end
+```
+
+ calling `fit_all_patterns` function.
+
+```julia
+	fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
+    			                    max_centred_objs::Int=200,
+                			        sort_by_area::Bool = false,
+                        			is_descend::Bool = true)
+
+```
+ 	This function fits `CentredObj`s of specified type, to all patterns and returns the vector of ROIs. Number of ROIs can be limited to `max_centred_obj` and also it is possible to sort all patterns by area before fitting by setting `sort_by_area`, if `is_descend` is true, all patterns will be sorted in area descending order. E.g. if one needs to fit four largest patterns with rectangular ROIs:
+
+```julia
+	vect_of_rois = fit_all_patterns(img,RectangleObj,max_centred_objs=4,sort_by_area = true)
+```
+
+It is also possible to precreate the Vector of empty ROIs and fit them to the image patterns using :
+
+```julia
+	vect_of_rois = [SquareObj for  _ in 1:10] # creates 10 square ROIs
+	fit_all_patterns!(vect_of_rois,marker_image(img)) # fits rois to patterns
+```
+"""
+
+# ╔═╡ a76e0a08-393e-472a-8df5-0650eb6a60af
+md"""
+Select objects on image types = $(@bind image_patterns_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) 
+"""
+
+# ╔═╡ 6e728ea6-38be-437a-96b4-9fa084f8fec5
+md"""
+Select objects ROI type = $(@bind multifit_roi_type Select([CircleObj=>"circle",  SquareObj =>"square",RectangleObj =>"rectangle"])) 
+"""
+
+# ╔═╡ 0badf26a-38fa-45be-9704-d4e80b12a9cb
+md"""
+	Select this checkbox to fit all objects $(@bind is_fit_multiple CheckBox(default=true))
+	"""
+
+# ╔═╡ f8154558-d0cb-4b27-8c0d-b5cac07a099c
+md"Patterns size range $(@bind pattern_sizes_range confirm(RangeSlider(5:1:120,default=10:1:50)))"
+
+# ╔═╡ 39e31290-e7b5-47ce-ac46-aebc33ddfa54
+md"""
+	Number of generated patterns $(@bind patterns_number confirm(PlutoUI.Slider(1:1:200,default=30,show_value=true)))
+	"""
+
+# ╔═╡ 7e484bde-1f2f-4d32-87c6-64ff884dc272
+md""" Number of patterns to fit $(@bind max_obj_number  Select(1:patterns_number,default=patterns_number))"""
+
+# ╔═╡ 304ac75d-bdc4-41de-bd2f-d1843ecd22f9
+md"Sort by area? $(@bind is_sort_by_area CheckBox(false))"
+
+# ╔═╡ 10954f10-9414-4839-872f-c2516d5d8e4e
+md"""
+	Click this button to generate the image pattern $(@bind fit_multiple Button("Regenerate patterns"))
+	"""
+
+# ╔═╡ d5b6f453-5e92-41e6-a45f-cb75660bc198
+begin # generating pattern 
+	fit_multiple
+	#patterns_number = 100
+	image_size = (500,1000)
+	img = fill(0.0,image_size...)# filling initial scene
+	generated_rois = ThermovisorImages.generate_random_objs(image_patterns_type,(1:1:image_size[1],1:1:image_size[2]),patterns_number,pattern_sizes_range)
+	for r in generated_rois
+		img[r] = rand(5:10)
+	end
+	rs = RescaledImage(img)
+	markers = ThermovisorImages.marker_image(rs,distance_threshold = 0.0)
+	separate_patterns_number = length(markers) # now we need to check for the separate patterns number 
+	rgb_markers = ThermovisorImages.draw(rs)	# converting to rgb image
+end;
+
+# ╔═╡ 9c13d94e-ca2f-41d6-922a-428bb7a476c8
+generated_patterns_stat = ThermovisorImages.CentredObjCollectionStat(generated_rois)
+
+# ╔═╡ 96ad6e27-52dd-41aa-b115-f852049a485a
+md"""Number of separate patterns:    $(separate_patterns_number)"""
+
+# ╔═╡ 9d79ba97-5aa8-4d60-8cf4-523a28b2e5ae
+md"Generated patterns"
+
+# ╔═╡ 6c78d805-4b14-4b7f-ad96-439d2a56605e
+rgb_markers
+
+# ╔═╡ fcb71c81-8ee5-4cf7-b293-ab97261d7213
+md"Fitted patterns"
+
+# ╔═╡ 6adfae4d-5137-4692-b9f3-3793c4c76202
+begin # fitting ROI's to image with several 
+	fit_multiple
+	if is_fit_multiple
+
+		fitted_rois = ThermovisorImages.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0,sort_by_area=is_sort_by_area,max_centred_objs=max_obj_number)
+		if length(fitted_rois)>0
+			rgb_image_multi_roi = ThermovisorImages.draw(img,fitted_rois[1],show_cross = true,fill=true)
+			for i in 2:length(fitted_rois)
+			 	ThermovisorImages.draw!(rgb_image_multi_roi,fitted_rois[i],fill=true,show_cross = true)
+			end
+			 rgb_image_multi_roi
+		end
+	else
+		println("There is no fitted ROIs")
+	end
+end
+
+# ╔═╡ 0cdb27f4-9796-479b-b43f-b349eaabc049
+md"""
+After fitting the regions of interest, it is possible to calculate basic statistics on the geometric properties of the objects by creating the objects of `CentredObjCollectionStat` type. This object contains data on maximal, minimal,averages, standard deviations and disribution hystorgams of areas, perimeters and sides of ROIs.
+```julia
+	stat_on_rois = CentredObjCollectionStat(fitted_rois)
+	stat_on_rois.maxs.side # returns the Tuple of (maximum side values,object index)
+	stat_on_rois.maxs.area # the same, but for area
+	h = stat_on_rois.hists.area # return histogram which can be plotted using plot(h)
+```
+and plot the histogram
+```julia
+	plot(stat_on_rois.hists.area) # plots side - distribution histogram 
+```
+
+
+"""
+
+# ╔═╡ f1512fc5-4a7a-4274-9d42-3057d9aec04f
+StatOnRois = ThermovisorImages.CentredObjCollectionStat(fitted_rois,nbins=Int(floor(patterns_number/3)))
+
+# ╔═╡ d91b478b-57fa-4f26-a05c-649097202102
+md"""
+	Maximal area of  $(StatOnRois.maxs.area[1])  has the ROI # $(StatOnRois.maxs.area[2])
+
+	The smallest ROIs # $(StatOnRois.mins.area[2]) has the area of  $(StatOnRois.mins.area[1])
+
+	"""
+
+# ╔═╡ 2925fafa-4722-4335-ba49-77c6a8fb110b
+md"""
+Show histogram for $(@bind selected_hist Select([:side,:area,:perimeter]))
+
+"""
+
+# ╔═╡ e7e6884a-1145-4a01-a429-6c4a84e7ea33
+multi_hist = plot(getfield(StatOnRois.hists,selected_hist),title="Distribution of ROIs over  "*string(selected_hist),label=nothing,alpha=0.5,dpi=600)
+
+# ╔═╡ 68b33b39-5ef5-4560-b4b2-1fe2f43a3628
+md" Save multiple patterns fit ? $(@bind is_save_multipattern_fit CheckBox(default=false))"
+
+# ╔═╡ 8a132aba-aa8a-428a-84a2-0ab6e5e2b891
+begin 
+	if is_save_multipattern_fit
+		FileIO.save(joinpath(assets_folder,"multiple_patterns_initial.png"),rgb_markers)
+		if is_fit_multiple
+			FileIO.save(joinpath(assets_folder,"multiple_patterns_fitted.png"),rgb_image_multi_roi)
+			savefig(multi_hist,joinpath(assets_folder,"multiple_patterns_hist.png"))
+		end
+	end
+end;
+
+# ╔═╡ f357bbd8-4d81-4f9e-870e-cf57124c5042
+md"""
+The following blocks show the same usage as the previous one, with an axception that it analyzes standard image files.  
+"""
+
+# ╔═╡ 821a7c95-f4da-410d-b780-111abb6d0db5
+md"""
+	Show/hide fitted rois $(@bind is_draw_rois Select( ["show" ;"hide" ],default = :hide))
+	"""
+
+# ╔═╡ febd591e-bb9f-4b21-93c8-aafd4c81ce12
+begin
+	coins_file = joinpath(images_folder,"coins.jpg")
+	if !isfile(coins_file)
+		download("http://docs.opencv.org/3.1.0/water_coins.jpg",coins_file)
+	end	
+	rescaled_coin = ThermovisorImages.read_temperature_file(coins_file,inverse_intensity=true)
+	markers_coins = ThermovisorImages.marker_image(rescaled_coin)
+	im_coin_float = rescaled_coin.im
+	fitted_rois_coins = ThermovisorImages.fit_all_patterns(rescaled_coin,multifit_roi_type)
+end;
+
+# ╔═╡ 0044c49b-1c72-4f78-97ee-87932c97d2a9
+begin
+		if is_draw_rois=="show"
+		rgb_image_coins = ThermovisorImages.draw(im_coin_float,fitted_rois_coins[1],show_cross = true,fill=true)
+		for i in 2:length(fitted_rois_coins)
+				 ThermovisorImages.draw!(rgb_image_coins,fitted_rois_coins[i],thickness = 1,fill=true,show_cross = true)
+		end
+	else
+		rgb_image_coins = ThermovisorImages.to_rgb(im_coin_float)
+		
+	end
+	rgb_image_coins
+end
+
+# ╔═╡ b640fcd0-3e49-471d-b281-87137a781eba
+begin 
+	test_markers = ThermovisorImages.marker_image(rescaled_coin)
+	before_sorting = ThermovisorImages.draw(Float64.(test_markers.markers))
+	ThermovisorImages.sort_markers!(test_markers)
+	after_sorting = ThermovisorImages.draw(Float64.(test_markers.markers))
+end;
+
+# ╔═╡ 8b2fdcf1-cd0e-4234-a24a-afa597552f9e
+md""" After labeling patterns (without fitting the ROIs), labels in `MarkeredImage` can be sorted by their area. Each pattern is assigned an integer label according to the internal logic of the labeling algorithm. In some cases, it may be useful to sort the labels by the size of the patterns, for example, before ROI fitting, when the number of ROIs is limited to a value smaller than the total number of patterns.  
+
+```julia
+markered_image = marker_image(rescaled_image)# markers are not ordered   
+sort_markers!(markered_image) # now,the pattern with index `1` has the largest area 
+rois = [SquareObj for _ in 1:5] # five empty squares
+fit_all_patterns!(rois,markered_image) # now five largeest pattern are fitted
+```
+"""
+
+# ╔═╡ 054b15d8-a4e6-42d4-b097-938d05cbb198
+md"Markered image before (left) and after (right) sorting features by their area (the brighter the color, the higher the label of the pattern)" 
+
+# ╔═╡ 7a00ce43-94e2-4f68-b651-b57bf7d6ab05
+hcat(before_sorting,after_sorting)
+
+# ╔═╡ 20cf3079-1115-451b-870d-2457a5cfd333
+md""" 
+### 9. Recalculation of the temperature field of the surface and the area of interest with a new value of emissivity. 
+
+As far as infrared cameras measure radiance from a surface, which depends on emissivity and temperature. When emissivity is changed (e.g., corrected or updated), the temperature must be recalculated so that the modeled radiance matches the measured radiance. This recalculation is necessary because emissivity can vary with material, surface condition, and wavelength, and incorrect emissivity leads to errors in temperature measurement 
+
+The main idea is to recalculate the temperature in such a way that the measured radiance within the infrared camera’s spectral range remains the same for two different surface emissivities (initial and modified).
+
+To obtain the new temperature ``T_{new}``, the package solves the following nonlinear equation using univariate optimization method:
+
+``\epsilon_{initial} \int_{\lambda_{left}}^{\lambda_{right}}I_{bb}(\lambda,T_{initial})d\lambda =\epsilon_{new} \int_{\lambda_{left}}^{\lambda_{right}}I_{bb}(\lambda,T_{new})d\lambda``
+
+where ``\lambda_{left}`` and ``\lambda_{right}`` define the working range of thermographic camera, ``T_{initial}`` and ``\epsilon_{initial}`` are the temperature and emissivity at each point of image,  respectively, ``\epsilon_{new}`` is a new emissivity.
+
+
+**ThermovisorImages.jl** package provides `recalculate_with_new_emissivity` function to accomplish this task. This function has three methods:
+
+```julia
+recalculate_with_new_emissivity!(image::AbstractArray,new_emissivity::Float64,
+                                        image_emissivity::Float64;
+                                        λ_left::Union{Float64,Nothing}=14.0,
+                                        λ_right::Union{Float64,Nothing}=14.5,
+                                        is_in_kelvins::Bool=false,
+                                        rel_tol::Float64=1e-3) 				 #(1)
+recalculate_with_new_emissivity!(image::AbstractArray,c::CentredObj,
+									new_emissivity::Float64, image_emissivity::Float64;kwargs...)     #(2)
+recalculate_with_new_emissivity!(image::AbstractArray,marker::MarkeredImage,
+        								label::Int,new_emissivity::Float64,
+										image_emissivity::Float64;kwargs...) #(3)
+```
+First method does not depend on package's internals and recalculates the whole image (or image view provided externally). `new_emissivity` and `image_emissivity` are the initial emissivity of the image and new emissivity for which the temperature should be adjusted. If both λ_left and λ_right are equal, function uses single wavelegth equation:
+
+``\epsilon_{initial} I_{bb}(\lambda_{fixed},T_{initial}) =\epsilon_{new}I_{bb}(\lambda,T_{new})``
+
+Singlewavelength version is much faster than the one with band integration, but less accurate.
+
+Methods (2) and (3) both allow to recalculate the image within the specified region, (2)  - recalculates the temperature within the ROI and (3)  - within the pattern, labeled with the `label` value.
+
+"""
+
+# ╔═╡ 0e05f2b9-37d2-4626-b50c-4c8d48022904
+md"""
+Select thermal image by tag $(@bind temp_to_recalc Select([v for v in files_in_dir_tags]))
+"""
+
+# ╔═╡ dc5be80b-9a5e-42f2-b75f-b338292851ee
+#reading selected file
+begin 
+	im_to_recalc = ThermovisorImages.read_temperature_file(files_in_dir[temp_to_recalc][2])
+	roi_obj = ThermovisorImages.fit_all_patterns(im_to_recalc)
+end;
+
+# ╔═╡ da18cd4d-73b3-491f-b9f0-d374b92ed8d2
+@bind args_in confirm(PlutoUI.combine() do Child
+md"""
+	Infrared camera settings:
+	
+	``\lambda_{left}`` = $(Child(Slider(0.5:1e-1:30,default=14.0,show_value=true)))
+	
+	``\lambda_{right}`` = $(Child(Slider(0.5:1e-1:30,default=14.5,show_value=true)))
+
+	``new \ emissivity`` = $(Child(Slider(0.01:1e-2:1.0,default=0.70,show_value=true)))	
+	
+	``\epsilon_{image}`` = $(Child(Slider(0.01:1e-2:1.0,default=1.0,show_value=true)))
+
+	Use single wavelength ? (calculating in band can be time consuming) = $(Child(CheckBox(true)))
+	
+	"""
+
+end)
+
+# ╔═╡ 8b017646-7a75-4973-a204-d74a42ffc97f
+args_t = NamedTuple{(:λ_left,:λ_right,:new_emissivity,:image_emissivity)}( !args_in[5] ? args_in[1:4] :  (args_in[1],args_in[1],args_in[3:4]...) )
+
+# ╔═╡ 4d377da2-e1b2-4aa3-a2c5-6d176ae8905f
+md"Left  - initial temperature distribution, right - recalculated "
+
+# ╔═╡ 9ba9540f-a2e2-40c4-99d5-940ec2e2839b
+begin
+	im_copy = copy(im_to_recalc.initial)
+	ThermovisorImages.recalculate_with_new_emissivity!(im_copy,roi_obj[],args_t.new_emissivity, args_t.image_emissivity;λ_left = args_t.λ_left, λ_right = args_t.λ_right)
+	heatmap(hcat(im_to_recalc.initial,im_copy),aspect_ratio=:equal,title = "Left - initial, right - recalculated")
+end
+
+# ╔═╡ 577897c4-c042-495e-a10e-9ac07ab2bf2b
+md"Difference between initial temperature distribution and recaculated for the new value of emissivity"
+
+# ╔═╡ d7abe315-ad5e-485e-8873-fe6f3cd241b5
+heatmap(im_copy .-im_to_recalc.initial,title="Temperature difference")
+
+# ╔═╡ 00000000-0000-0000-0000-000000000001
+PLUTO_PROJECT_TOML_CONTENTS = """
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
+ColorVectorSpace = "c3611d14-8923-5661-9e6a-0046d554d3a4"
+Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+FileTypes = "b58e86d0-4a47-4fce-a54d-8006a143ed90"
+Gtk = "4c0ca9eb-093a-5379-98c5-f87ac0bbbf44"
+ImageDraw = "4381153b-2b60-58ae-a1ba-fd683676385f"
+ImageIO = "82e4d734-157c-48bb-816b-45c225c6df19"
+ImageShow = "4e3cecfd-b093-5904-9786-8bbb286a6a31"
+Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
+Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+PlanckFunctions = "56edaee7-e77f-43d7-994d-8307b8de0a62"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+
+[compat]
+BenchmarkTools = "~1.6.0"
+CSV = "~0.10.15"
+ColorSchemes = "~3.26.0"
+ColorVectorSpace = "~0.9.10"
+Colors = "~0.12.11"
+Distributions = "~0.25.120"
+FileIO = "~1.17.0"
+FileTypes = "~0.1.0"
+Gtk = "~1.3.1"
+ImageDraw = "~0.2.6"
+ImageIO = "~0.6.8"
+ImageShow = "~0.3.8"
+Images = "~0.25.3"
+Interpolations = "~0.14.0"
+LaTeXStrings = "~1.4.0"
+Optim = "~1.12.0"
+PlanckFunctions = "~1.0.0"
+Plots = "~1.40.13"
+PlutoUI = "~0.7.62"
+Revise = "~3.8.0"
+StaticArrays = "~1.9.13"
+StatsBase = "~0.34.5"
+"""
+
+# ╔═╡ 00000000-0000-0000-0000-000000000002
+PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "e90fb1371447e51e48d806c3c42ba1aacf4eac3d"
+project_hash = "7d840be103620e040059a9cf283c588c04a0541c"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "e2478490447631aedba0823d4d7a80b2cc8cdb32"
@@ -19,10 +857,11 @@ version = "1.14.0"
     ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
     EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
 
-[[deps.ANSIColoredPrinters]]
-git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
-uuid = "a4c015fc-c6ff-483c-b24f-f7ea428134e9"
-version = "0.0.1"
+[[deps.ATK_jll]]
+deps = ["Artifacts", "Glib_jll", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "c0a10eaf3a7e1e909ef8fe45971a73524bfce1bf"
+uuid = "7b86fcea-f67b-53e1-809c-8f1719c154e8"
+version = "2.38.1+0"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -35,20 +874,20 @@ weakdeps = ["ChainRulesCore", "Test"]
     AbstractFFTsChainRulesCoreExt = "ChainRulesCore"
     AbstractFFTsTestExt = "Test"
 
-[[deps.AbstractTrees]]
-git-tree-sha1 = "2d9c9a55f9c93e8887ad391fbae72f8ef55e1177"
-uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
-version = "0.4.5"
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "6e1d2a35f2f90a4bc7c2ed98079b2ba09c35b83a"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.3.2"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "f7817e2e585aa6d924fd714df1e2a84be7896c60"
+git-tree-sha1 = "cde29ddf7e5726c9fb511f340244ea3481267608"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "4.3.0"
-weakdeps = ["SparseArrays", "StaticArrays"]
+version = "3.7.2"
+weakdeps = ["StaticArrays"]
 
     [deps.Adapt.extensions]
-    AdaptSparseArraysExt = "SparseArrays"
     AdaptStaticArraysExt = "StaticArrays"
 
 [[deps.AliasTables]]
@@ -68,21 +907,16 @@ uuid = "ec485272-7323-5ecc-a04f-4719b315124d"
 version = "0.4.0"
 
 [[deps.ArrayInterface]]
-deps = ["Adapt", "LinearAlgebra"]
-git-tree-sha1 = "9606d7832795cbef89e06a550475be300364a8aa"
+deps = ["Adapt", "LinearAlgebra", "Requires", "SparseArrays", "SuiteSparse"]
+git-tree-sha1 = "c5aeb516a84459e0318a02507d2261edad97eb75"
 uuid = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
-version = "7.19.0"
+version = "7.7.1"
 
     [deps.ArrayInterface.extensions]
     ArrayInterfaceBandedMatricesExt = "BandedMatrices"
     ArrayInterfaceBlockBandedMatricesExt = "BlockBandedMatrices"
     ArrayInterfaceCUDAExt = "CUDA"
-    ArrayInterfaceCUDSSExt = "CUDSS"
-    ArrayInterfaceChainRulesCoreExt = "ChainRulesCore"
-    ArrayInterfaceChainRulesExt = "ChainRules"
     ArrayInterfaceGPUArraysCoreExt = "GPUArraysCore"
-    ArrayInterfaceReverseDiffExt = "ReverseDiff"
-    ArrayInterfaceSparseArraysExt = "SparseArrays"
     ArrayInterfaceStaticArraysCoreExt = "StaticArraysCore"
     ArrayInterfaceTrackerExt = "Tracker"
 
@@ -90,12 +924,7 @@ version = "7.19.0"
     BandedMatrices = "aae01518-5342-5314-be14-df237901396f"
     BlockBandedMatrices = "ffab5731-97b5-5995-9138-79e8c1846df0"
     CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-    CUDSS = "45b445bb-4962-46a0-9369-b4df9d0f772e"
-    ChainRules = "082447d4-558c-5d27-93f4-14fc19e9eca2"
-    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
     GPUArraysCore = "46192b85-c4d5-4398-a991-12ede77f4527"
-    ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
-    SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
     StaticArraysCore = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
     Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
 
@@ -105,9 +934,9 @@ version = "1.11.0"
 
 [[deps.AxisAlgorithms]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "WoodburyMatrices"]
-git-tree-sha1 = "01b8ccb13d68535d73d2b0c23e39bd23155fb712"
+git-tree-sha1 = "66771c8d21c8ff5e3a93379480a2307ac36863f7"
 uuid = "13072b0f-2c55-5437-9ae7-d433b7a33950"
-version = "1.1.0"
+version = "1.0.1"
 
 [[deps.AxisArrays]]
 deps = ["Dates", "IntervalSets", "IterTools", "RangeArrays"]
@@ -119,16 +948,16 @@ version = "0.4.7"
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 version = "1.11.0"
 
+[[deps.BenchmarkTools]]
+deps = ["Compat", "JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "e38fbc49a620f5d0b660d7f543db1009fe0f8336"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.6.0"
+
 [[deps.BitFlags]]
 git-tree-sha1 = "0691e34b3bb8be9307330f88d1a3c3f25466c24d"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
 version = "0.1.9"
-
-[[deps.BitTwiddlingConvenienceFunctions]]
-deps = ["Static"]
-git-tree-sha1 = "f21cfd4950cb9f0587d5067e69405ad2acd27b87"
-uuid = "62783981-4cbd-42fc-bca8-16325de8dc4b"
-version = "0.1.6"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -141,17 +970,17 @@ git-tree-sha1 = "389ad5c84de1ae7cf0e28e381131c98ea87d54fc"
 uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.5.0"
 
-[[deps.CPUSummary]]
-deps = ["CpuId", "IfElse", "PrecompileTools", "Static"]
-git-tree-sha1 = "5a97e67919535d6841172016c9530fd69494e5ec"
-uuid = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
-version = "0.2.6"
-
 [[deps.CSV]]
 deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "PrecompileTools", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings", "WorkerUtilities"]
 git-tree-sha1 = "deddd8725e5e1cc49ee205a1964256043720a6c3"
 uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 version = "0.10.15"
+
+[[deps.Cairo]]
+deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
+git-tree-sha1 = "71aa551c5c33f1a4415867fe06b7844faadb0ae9"
+uuid = "159f3aea-2a34-519c-b102-8c37f9878175"
+version = "1.1.1"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -175,17 +1004,17 @@ weakdeps = ["SparseArrays"]
     [deps.ChainRulesCore.extensions]
     ChainRulesCoreSparseArraysExt = "SparseArrays"
 
-[[deps.CloseOpenIntervals]]
-deps = ["Static", "StaticArrayInterface"]
-git-tree-sha1 = "05ba0d07cd4fd8b7a39541e31a7b0254704ea581"
-uuid = "fb6a15b2-703c-40df-9091-08a04967cfa9"
-version = "0.1.13"
-
 [[deps.Clustering]]
 deps = ["Distances", "LinearAlgebra", "NearestNeighbors", "Printf", "Random", "SparseArrays", "Statistics", "StatsBase"]
 git-tree-sha1 = "3e22db924e2945282e70c33b75d4dde8bfa44c94"
 uuid = "aaaa29a8-35af-508c-8bc3-b662a17a0fe5"
 version = "0.15.8"
+
+[[deps.CodeTracking]]
+deps = ["InteractiveUtils", "UUIDs"]
+git-tree-sha1 = "062c5e1a5bf6ada13db96a4ae4749a4c2234f521"
+uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
+version = "1.3.9"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -195,46 +1024,33 @@ version = "0.7.8"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
-git-tree-sha1 = "403f2d8e209681fcbd9468a8514efff3ea08452e"
+git-tree-sha1 = "b5278586822443594ff615963b0c09755771b3e0"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.29.0"
+version = "3.26.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
-git-tree-sha1 = "67e11ee83a43eb71ddc950302c53bf33f0690dfe"
+git-tree-sha1 = "b10d0b65641d57b8b4d5e234446582de5047050d"
 uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.12.1"
-weakdeps = ["StyledStrings"]
-
-    [deps.ColorTypes.extensions]
-    StyledStringsExt = "StyledStrings"
+version = "0.11.5"
 
 [[deps.ColorVectorSpace]]
-deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "Requires", "Statistics", "TensorCore"]
-git-tree-sha1 = "8b3b6f87ce8f65a2b4f857528fd8d70086cd72b1"
+deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "SpecialFunctions", "Statistics", "TensorCore"]
+git-tree-sha1 = "600cc5508d66b78aae350f7accdb58763ac18589"
 uuid = "c3611d14-8923-5661-9e6a-0046d554d3a4"
-version = "0.11.0"
-weakdeps = ["SpecialFunctions"]
-
-    [deps.ColorVectorSpace.extensions]
-    SpecialFunctionsExt = "SpecialFunctions"
+version = "0.9.10"
 
 [[deps.Colors]]
 deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
-git-tree-sha1 = "37ea44092930b1811e666c3bc38065d7d87fcc74"
+git-tree-sha1 = "362a287c3aa50601b0bc359053d5c2468f0e7ce0"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
-version = "0.13.1"
+version = "0.12.11"
 
 [[deps.CommonSubexpressions]]
 deps = ["MacroTools"]
 git-tree-sha1 = "cda2cfaebb4be89c9084adaca7dd7333369715c5"
 uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
 version = "0.3.1"
-
-[[deps.CommonWorldInvalidations]]
-git-tree-sha1 = "ae52d1c52048455e85a387fbee9be553ec2b68d0"
-uuid = "f70d9fcc-98c5-4d4a-abd7-e4cdeebd8ca8"
-version = "1.0.0"
 
 [[deps.Compat]]
 deps = ["TOML", "UUIDs"]
@@ -283,12 +1099,6 @@ deps = ["LinearAlgebra", "StaticArrays"]
 git-tree-sha1 = "a692f5e257d332de1e554e4566a4e5a8a72de2b2"
 uuid = "150eb455-5306-5404-9cee-2592286d6298"
 version = "0.6.4"
-
-[[deps.CpuId]]
-deps = ["Markdown"]
-git-tree-sha1 = "fcbb72b032692610bfbdb15018ac16a36cf2e406"
-uuid = "adafc99b-e345-5852-983c-f28acb93d879"
-version = "0.3.1"
 
 [[deps.CustomUnitRanges]]
 git-tree-sha1 = "1a3f97f907e6dd8983b744d2642651bb162a3f7a"
@@ -423,15 +1233,9 @@ version = "0.25.120"
     Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.DocStringExtensions]]
-git-tree-sha1 = "7442a5dfe1ebb773c29cc2962a8980f47221d76c"
+git-tree-sha1 = "e7b7e6f178525d17c720ab9c081e4ef04429f860"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
-version = "0.9.5"
-
-[[deps.Documenter]]
-deps = ["ANSIColoredPrinters", "AbstractTrees", "Base64", "CodecZlib", "Dates", "DocStringExtensions", "Downloads", "Git", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "MarkdownAST", "Pkg", "PrecompileTools", "REPL", "RegistryInstances", "SHA", "TOML", "Test", "Unicode"]
-git-tree-sha1 = "0ef76e54dfe9d736350a79334dc66236598c8d38"
-uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "1.12.0"
+version = "0.9.4"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
@@ -481,9 +1285,9 @@ version = "0.3.2"
 
 [[deps.FFTW]]
 deps = ["AbstractFFTs", "FFTW_jll", "LinearAlgebra", "MKL_jll", "Preferences", "Reexport"]
-git-tree-sha1 = "797762812ed063b9b94f6cc7742bc8883bb5e69e"
+git-tree-sha1 = "7de7c78d681078f027389e067864a8d53bd7c3c9"
 uuid = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
-version = "1.9.0"
+version = "1.8.1"
 
 [[deps.FFTW_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -603,15 +1407,21 @@ version = "3.4.0+2"
 
 [[deps.GR]]
 deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Preferences", "Printf", "Qt6Wayland_jll", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "p7zip_jll"]
-git-tree-sha1 = "629693584cef594c3f6f99e76e7a7ad17e60e8d5"
+git-tree-sha1 = "4424dca1462cc3f19a0e6f07b809ad948ac1d62b"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.73.7"
+version = "0.73.16"
 
 [[deps.GR_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "FreeType2_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Qt6Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "a8863b69c2a0859f2c2c87ebdc4c6712e88bdf0d"
+git-tree-sha1 = "d7ecfaca1ad1886de4f9053b5b8aef34f36ede7f"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.73.7+0"
+version = "0.73.16+0"
+
+[[deps.GTK3_jll]]
+deps = ["ATK_jll", "Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "FriBidi_jll", "Glib_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl", "Libepoxy_jll", "Pango_jll", "Pkg", "Wayland_jll", "Xorg_libX11_jll", "Xorg_libXcomposite_jll", "Xorg_libXcursor_jll", "Xorg_libXdamage_jll", "Xorg_libXext_jll", "Xorg_libXfixes_jll", "Xorg_libXi_jll", "Xorg_libXinerama_jll", "Xorg_libXrandr_jll", "Xorg_libXrender_jll", "at_spi2_atk_jll", "gdk_pixbuf_jll", "iso_codes_jll", "xkbcommon_jll"]
+git-tree-sha1 = "b080a592525632d287aee4637a62682576b7f5e4"
+uuid = "77ec8976-b24b-556a-a1bf-49a033a670a6"
+version = "3.24.31+0"
 
 [[deps.Gettext_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
@@ -624,24 +1434,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "43ba3d3c82c18d88471cfd2924931658838c9d8f"
 uuid = "61579ee1-b43e-5ca0-a5da-69d92c66a64b"
 version = "9.55.0+4"
-
-[[deps.Giflib_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "6570366d757b50fabae9f4315ad74d2e40c0560a"
-uuid = "59f7168a-df46-5410-90c8-f2779963d0ec"
-version = "5.2.3+0"
-
-[[deps.Git]]
-deps = ["Git_jll", "JLLWrappers", "OpenSSH_jll"]
-git-tree-sha1 = "2230a9cc32394b11a3b3aa807a382e3bbab1198c"
-uuid = "d7ba0133-e1db-5d97-8f8c-041e4b3a1eb2"
-version = "1.4.0"
-
-[[deps.Git_jll]]
-deps = ["Artifacts", "Expat_jll", "JLLWrappers", "LibCURL_jll", "Libdl", "Libiconv_jll", "OpenSSL_jll", "PCRE2_jll", "Zlib_jll"]
-git-tree-sha1 = "2f6d6f7e6d6de361865d4394b802c02fc944fc7c"
-uuid = "f8c6e375-362e-5223-8a59-34ff63f689eb"
-version = "2.49.0+0"
 
 [[deps.Glib_jll]]
 deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE2_jll", "Zlib_jll"]
@@ -662,15 +1454,21 @@ uuid = "3b182d85-2403-5c21-9c21-1e1f0cc25472"
 version = "1.3.15+0"
 
 [[deps.Graphs]]
-deps = ["ArnoldiMethod", "DataStructures", "Distributed", "Inflate", "LinearAlgebra", "Random", "SharedArrays", "SimpleTraits", "SparseArrays", "Statistics"]
-git-tree-sha1 = "c5abfa0ae0aaee162a3fbb053c13ecda39be545b"
+deps = ["ArnoldiMethod", "Compat", "DataStructures", "Distributed", "Inflate", "LinearAlgebra", "Random", "SharedArrays", "SimpleTraits", "SparseArrays", "Statistics"]
+git-tree-sha1 = "3169fd3440a02f35e549728b0890904cfd4ae58a"
 uuid = "86223c79-3864-5bf0-83f7-82e725a168b6"
-version = "1.13.0"
+version = "1.12.1"
 
 [[deps.Grisu]]
 git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
+
+[[deps.Gtk]]
+deps = ["Cairo", "Cairo_jll", "Dates", "GTK3_jll", "Glib_jll", "Graphics", "JLLWrappers", "Libdl", "Librsvg_jll", "Pkg", "Reexport", "Scratch", "Serialization", "Test", "Xorg_xkeyboard_config_jll", "adwaita_icon_theme_jll", "gdk_pixbuf_jll", "hicolor_icon_theme_jll"]
+git-tree-sha1 = "7b370267b816cd697d530b39dc863903c1e3f36d"
+uuid = "4c0ca9eb-093a-5379-98c5-f87ac0bbbf44"
+version = "1.3.1"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "PrecompileTools", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
@@ -684,23 +1482,23 @@ git-tree-sha1 = "f923f9a774fcf3f5cb761bfa43aeadd689714813"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "8.5.1+0"
 
-[[deps.HistogramThresholding]]
-deps = ["ImageBase", "LinearAlgebra", "MappedArrays"]
-git-tree-sha1 = "7194dfbb2f8d945abdaf68fa9480a965d6661e69"
-uuid = "2c695a8d-9458-5d45-9878-1b8a99cf7853"
-version = "0.3.1"
-
-[[deps.HostCPUFeatures]]
-deps = ["BitTwiddlingConvenienceFunctions", "IfElse", "Libdl", "Static"]
-git-tree-sha1 = "8e070b599339d622e9a081d17230d74a5c473293"
-uuid = "3e5b6fbb-0976-4d2c-9146-d79de83f2fb0"
-version = "0.1.17"
-
 [[deps.HypergeometricFunctions]]
 deps = ["LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]
 git-tree-sha1 = "68c173f4f449de5b438ee67ed0c9c748dc31a2ec"
 uuid = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
 version = "0.3.28"
+
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.5"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.5"
 
 [[deps.IOCapture]]
 deps = ["Logging", "Random"]
@@ -708,28 +1506,17 @@ git-tree-sha1 = "b6d6bfdd7ce25b0f9b2f6b3dd56b2673a66c8770"
 uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
 version = "0.2.5"
 
-[[deps.IfElse]]
-git-tree-sha1 = "debdd00ffef04665ccbb3e150747a77560e8fad1"
-uuid = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
-version = "0.1.1"
-
 [[deps.ImageAxes]]
 deps = ["AxisArrays", "ImageBase", "ImageCore", "Reexport", "SimpleTraits"]
-git-tree-sha1 = "e12629406c6c4442539436581041d372d69c55ba"
+git-tree-sha1 = "2e4520d67b0cef90865b3ef727594d2a58e0e1f8"
 uuid = "2803e5a7-5153-5ecf-9a86-9b4c37f5f5ac"
-version = "0.6.12"
+version = "0.6.11"
 
 [[deps.ImageBase]]
 deps = ["ImageCore", "Reexport"]
-git-tree-sha1 = "eb49b82c172811fd2c86759fa0553a2221feb909"
+git-tree-sha1 = "b51bb8cae22c66d0f6357e3bcb6363145ef20835"
 uuid = "c817782e-172a-44cc-b673-b171935fbb9e"
-version = "0.1.7"
-
-[[deps.ImageBinarization]]
-deps = ["HistogramThresholding", "ImageCore", "LinearAlgebra", "Polynomials", "Reexport", "Statistics"]
-git-tree-sha1 = "33485b4e40d1df46c806498c73ea32dc17475c59"
-uuid = "cbc4b850-ae4b-5111-9e64-df94c024a13d"
-version = "0.3.1"
+version = "0.1.5"
 
 [[deps.ImageContrastAdjustment]]
 deps = ["ImageBase", "ImageCore", "ImageTransformations", "Parameters"]
@@ -738,16 +1525,10 @@ uuid = "f332f351-ec65-5f6a-b3d1-319c6670881a"
 version = "0.3.12"
 
 [[deps.ImageCore]]
-deps = ["ColorVectorSpace", "Colors", "FixedPointNumbers", "MappedArrays", "MosaicViews", "OffsetArrays", "PaddedViews", "PrecompileTools", "Reexport"]
-git-tree-sha1 = "8c193230235bbcee22c8066b0374f63b5683c2d3"
+deps = ["AbstractFFTs", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Graphics", "MappedArrays", "MosaicViews", "OffsetArrays", "PaddedViews", "Reexport"]
+git-tree-sha1 = "acf614720ef026d38400b3817614c45882d75500"
 uuid = "a09fc81d-aa75-5fe9-8630-4744c3626534"
-version = "0.10.5"
-
-[[deps.ImageCorners]]
-deps = ["ImageCore", "ImageFiltering", "PrecompileTools", "StaticArrays", "StatsBase"]
-git-tree-sha1 = "24c52de051293745a9bad7d73497708954562b79"
-uuid = "89d5987c-236e-4e32-acd0-25bd6bd87b70"
-version = "0.1.3"
+version = "0.9.4"
 
 [[deps.ImageDistances]]
 deps = ["Distances", "ImageCore", "ImageMorphology", "LinearAlgebra", "Statistics"]
@@ -763,39 +1544,39 @@ version = "0.2.6"
 
 [[deps.ImageFiltering]]
 deps = ["CatIndices", "ComputationalResources", "DataStructures", "FFTViews", "FFTW", "ImageBase", "ImageCore", "LinearAlgebra", "OffsetArrays", "PrecompileTools", "Reexport", "SparseArrays", "StaticArrays", "Statistics", "TiledIteration"]
-git-tree-sha1 = "eea3a5095c0c5f143e62773164ab11f67e43c4bb"
+git-tree-sha1 = "3447781d4c80dbe6d71d239f7cfb1f8049d4c84f"
 uuid = "6a3955dd-da59-5b1f-98d4-e7296123deb5"
-version = "0.7.10"
+version = "0.7.6"
 
 [[deps.ImageIO]]
-deps = ["FileIO", "IndirectArrays", "JpegTurbo", "LazyModules", "Netpbm", "OpenEXR", "PNGFiles", "QOI", "Sixel", "TiffImages", "UUIDs", "WebP"]
-git-tree-sha1 = "696144904b76e1ca433b886b4e7edd067d76cbf7"
+deps = ["FileIO", "IndirectArrays", "JpegTurbo", "LazyModules", "Netpbm", "OpenEXR", "PNGFiles", "QOI", "Sixel", "TiffImages", "UUIDs"]
+git-tree-sha1 = "437abb322a41d527c197fa800455f79d414f0a3c"
 uuid = "82e4d734-157c-48bb-816b-45c225c6df19"
-version = "0.6.9"
+version = "0.6.8"
 
 [[deps.ImageMagick]]
-deps = ["FileIO", "ImageCore", "ImageMagick_jll", "InteractiveUtils"]
-git-tree-sha1 = "8e64ab2f0da7b928c8ae889c514a52741debc1c2"
+deps = ["FileIO", "ImageCore", "ImageMagick_jll", "InteractiveUtils", "Libdl", "Pkg", "Random"]
+git-tree-sha1 = "5bc1cb62e0c5f1005868358db0692c994c3a13c6"
 uuid = "6218d12a-5da1-5696-b52f-db25d2ecc6d1"
-version = "1.4.2"
+version = "1.2.1"
 
 [[deps.ImageMagick_jll]]
 deps = ["Artifacts", "Ghostscript_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "OpenJpeg_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "afde851466407a99d48829051c36ac80749d8d7c"
+git-tree-sha1 = "d65554bad8b16d9562050c67e7223abf91eaba2f"
 uuid = "c73af94c-d91f-53ed-93a7-00f77d67a9d7"
-version = "7.1.1048+0"
+version = "6.9.13+0"
 
 [[deps.ImageMetadata]]
 deps = ["AxisArrays", "ImageAxes", "ImageBase", "ImageCore"]
-git-tree-sha1 = "2a81c3897be6fbcde0802a0ebe6796d0562f63ec"
+git-tree-sha1 = "355e2b974f2e3212a75dfb60519de21361ad3cb7"
 uuid = "bc367c6b-8a6b-528e-b4bd-a4b897500b49"
-version = "0.9.10"
+version = "0.9.9"
 
 [[deps.ImageMorphology]]
-deps = ["DataStructures", "ImageCore", "LinearAlgebra", "LoopVectorization", "OffsetArrays", "Requires", "TiledIteration"]
-git-tree-sha1 = "cffa21df12f00ca1a365eb8ed107614b40e8c6da"
+deps = ["ImageCore", "LinearAlgebra", "Requires", "TiledIteration"]
+git-tree-sha1 = "e7c68ab3df4a75511ba33fc5d8d9098007b579a8"
 uuid = "787d08f9-d448-5407-9aad-5290dd7ab264"
-version = "0.4.6"
+version = "0.3.2"
 
 [[deps.ImageQualityIndexes]]
 deps = ["ImageContrastAdjustment", "ImageCore", "ImageDistances", "ImageFiltering", "LazyModules", "OffsetArrays", "PrecompileTools", "Statistics"]
@@ -805,9 +1586,9 @@ version = "0.3.7"
 
 [[deps.ImageSegmentation]]
 deps = ["Clustering", "DataStructures", "Distances", "Graphs", "ImageCore", "ImageFiltering", "ImageMorphology", "LinearAlgebra", "MetaGraphs", "RegionTrees", "SimpleWeightedGraphs", "StaticArrays", "Statistics"]
-git-tree-sha1 = "7196039573b6f312864547eb7a74360d6c0ab8e6"
+git-tree-sha1 = "44664eea5408828c03e5addb84fa4f916132fc26"
 uuid = "80713f31-8817-5129-9cf8-209ff8fb23e1"
-version = "1.9.0"
+version = "1.8.1"
 
 [[deps.ImageShow]]
 deps = ["Base64", "ColorSchemes", "FileIO", "ImageBase", "ImageCore", "OffsetArrays", "StackViews"]
@@ -816,16 +1597,16 @@ uuid = "4e3cecfd-b093-5904-9786-8bbb286a6a31"
 version = "0.3.8"
 
 [[deps.ImageTransformations]]
-deps = ["AxisAlgorithms", "CoordinateTransformations", "ImageBase", "ImageCore", "Interpolations", "OffsetArrays", "Rotations", "StaticArrays"]
-git-tree-sha1 = "dfde81fafbe5d6516fb864dc79362c5c6b973c82"
+deps = ["AxisAlgorithms", "ColorVectorSpace", "CoordinateTransformations", "ImageBase", "ImageCore", "Interpolations", "OffsetArrays", "Rotations", "StaticArrays"]
+git-tree-sha1 = "8717482f4a2108c9358e5c3ca903d3a6113badc9"
 uuid = "02fcd773-0e25-5acc-982a-7f6622650795"
-version = "0.10.2"
+version = "0.9.5"
 
 [[deps.Images]]
-deps = ["Base64", "FileIO", "Graphics", "ImageAxes", "ImageBase", "ImageBinarization", "ImageContrastAdjustment", "ImageCore", "ImageCorners", "ImageDistances", "ImageFiltering", "ImageIO", "ImageMagick", "ImageMetadata", "ImageMorphology", "ImageQualityIndexes", "ImageSegmentation", "ImageShow", "ImageTransformations", "IndirectArrays", "IntegralArrays", "Random", "Reexport", "SparseArrays", "StaticArrays", "Statistics", "StatsBase", "TiledIteration"]
-git-tree-sha1 = "a49b96fd4a8d1a9a718dfd9cde34c154fc84fcd5"
+deps = ["Base64", "FileIO", "Graphics", "ImageAxes", "ImageBase", "ImageContrastAdjustment", "ImageCore", "ImageDistances", "ImageFiltering", "ImageIO", "ImageMagick", "ImageMetadata", "ImageMorphology", "ImageQualityIndexes", "ImageSegmentation", "ImageShow", "ImageTransformations", "IndirectArrays", "IntegralArrays", "Random", "Reexport", "SparseArrays", "StaticArrays", "Statistics", "StatsBase", "TiledIteration"]
+git-tree-sha1 = "5fa9f92e1e2918d9d1243b1131abe623cdf98be7"
 uuid = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
-version = "0.26.2"
+version = "0.25.3"
 
 [[deps.Imath_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -875,14 +1656,9 @@ version = "1.11.0"
 
 [[deps.Interpolations]]
 deps = ["Adapt", "AxisAlgorithms", "ChainRulesCore", "LinearAlgebra", "OffsetArrays", "Random", "Ratios", "Requires", "SharedArrays", "SparseArrays", "StaticArrays", "WoodburyMatrices"]
-git-tree-sha1 = "f2905febca224eade352a573e129ef43aa593354"
+git-tree-sha1 = "721ec2cf720536ad005cb38f50dbba7b02419a15"
 uuid = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
-version = "0.16.1"
-weakdeps = ["ForwardDiff", "Unitful"]
-
-    [deps.Interpolations.extensions]
-    InterpolationsForwardDiffExt = "ForwardDiff"
-    InterpolationsUnitfulExt = "Unitful"
+version = "0.14.7"
 
 [[deps.IntervalSets]]
 git-tree-sha1 = "5fbb102dcb8b1a858111ae81d56682376130517d"
@@ -911,14 +1687,10 @@ uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
 
 [[deps.JLD2]]
-deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "PrecompileTools", "TranscodingStreams"]
-git-tree-sha1 = "8e071648610caa2d3a5351aba03a936a0c37ec61"
+deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "PrecompileTools", "Requires", "TranscodingStreams"]
+git-tree-sha1 = "89e1e5c3d43078d42eed2306cab2a11b13e5c6ae"
 uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
-version = "0.5.13"
-weakdeps = ["UnPack"]
-
-    [deps.JLD2.extensions]
-    UnPackExt = "UnPack"
+version = "0.4.54"
 
 [[deps.JLFzf]]
 deps = ["REPL", "Random", "fzf_jll"]
@@ -950,6 +1722,12 @@ git-tree-sha1 = "eac1206917768cb54957c65a615460d87b455fc1"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "3.1.1+0"
 
+[[deps.JuliaInterpreter]]
+deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
+git-tree-sha1 = "6ac9e4acc417a5b534ace12690bc6973c25b862f"
+uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
+version = "0.10.3"
+
 [[deps.LAME_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "170b660facf5df5de098d866564877e119141cbd"
@@ -957,10 +1735,10 @@ uuid = "c1c5ebd0-6772-5130-a774-d5fcae4a789d"
 version = "3.100.2+0"
 
 [[deps.LERC_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "bf36f528eec6634efc60d7ec062008f171071434"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "aaafe88dccbd957a8d82f7d05be9b69172e0cee3"
 uuid = "88015f11-f218-50d7-93a8-a6af411a945d"
-version = "3.0.0+1"
+version = "4.0.1+0"
 
 [[deps.LLVMOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -996,17 +1774,6 @@ version = "0.16.8"
     SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
     SymEngine = "123dc426-2d89-5057-bbad-38513e3affd8"
     tectonic_jll = "d7dd28d6-a5e6-559c-9131-7eb760cdacc5"
-
-[[deps.LayoutPointers]]
-deps = ["ArrayInterface", "LinearAlgebra", "ManualMemory", "SIMDTypes", "Static", "StaticArrayInterface"]
-git-tree-sha1 = "a9eaadb366f5493a5654e843864c13d8b107548c"
-uuid = "10f19ff3-798f-405d-979b-55457f8fc047"
-version = "0.1.17"
-
-[[deps.LazilyInitializedFields]]
-git-tree-sha1 = "0f2da712350b020bc3957f269c9caad516383ee0"
-uuid = "0e77f7df-68c5-4e49-93ce-4cd80f5598bf"
-version = "1.3.0"
 
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
@@ -1047,6 +1814,12 @@ version = "1.11.0+1"
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 version = "1.11.0"
 
+[[deps.Libepoxy_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libglvnd_jll", "Pkg", "Xorg_libX11_jll"]
+git-tree-sha1 = "7a0158b71f8be5c771e7a273183b2d0ac35278c5"
+uuid = "42c93a91-0102-5b3f-8f9d-e41de60ac950"
+version = "1.5.10+0"
+
 [[deps.Libffi_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "c8da7e6a91781c41a863611c7e966098d783c57a"
@@ -1071,11 +1844,17 @@ git-tree-sha1 = "a31572773ac1b745e0343fe5e2c8ddda7a37e997"
 uuid = "4b2f31a3-9ecc-558c-b454-b3730dcb73e9"
 version = "2.41.0+0"
 
+[[deps.Librsvg_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pango_jll", "Pkg", "gdk_pixbuf_jll"]
+git-tree-sha1 = "ae0923dab7324e6bc980834f709c4cd83dd797ed"
+uuid = "925c91fb-5dd6-59dd-8e8c-345e74382d89"
+version = "2.54.5+0"
+
 [[deps.Libtiff_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "LERC_jll", "Libdl", "XZ_jll", "Zlib_jll", "Zstd_jll"]
-git-tree-sha1 = "2da088d113af58221c52828a80378e16be7d037a"
+git-tree-sha1 = "4ab7581296671007fc33f07a721631b8855f4b1d"
 uuid = "89763e89-9b03-5906-acba-b20f662cd828"
-version = "4.5.1+1"
+version = "4.7.1+0"
 
 [[deps.Libuuid_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1126,16 +1905,16 @@ git-tree-sha1 = "f02b56007b064fbfddb4c9cd60161b6dd0f40df3"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.1.0"
 
-[[deps.LoopVectorization]]
-deps = ["ArrayInterface", "CPUSummary", "CloseOpenIntervals", "DocStringExtensions", "HostCPUFeatures", "IfElse", "LayoutPointers", "LinearAlgebra", "OffsetArrays", "PolyesterWeave", "PrecompileTools", "SIMDTypes", "SLEEFPirates", "Static", "StaticArrayInterface", "ThreadingUtilities", "UnPack", "VectorizationBase"]
-git-tree-sha1 = "e5afce7eaf5b5ca0d444bcb4dc4fd78c54cbbac0"
-uuid = "bdcacae8-1622-11e9-2a5c-532679323890"
-version = "0.12.172"
-weakdeps = ["ChainRulesCore", "ForwardDiff", "SpecialFunctions"]
+[[deps.LoweredCodeUtils]]
+deps = ["JuliaInterpreter"]
+git-tree-sha1 = "4ef1c538614e3ec30cb6383b9eb0326a5c3a9763"
+uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
+version = "3.3.0"
 
-    [deps.LoopVectorization.extensions]
-    ForwardDiffExt = ["ChainRulesCore", "ForwardDiff"]
-    SpecialFunctionsExt = "SpecialFunctions"
+[[deps.MIMEs]]
+git-tree-sha1 = "c64d943587f7187e751162b3b84445bbbd79f691"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "1.1.0"
 
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "oneTBB_jll"]
@@ -1148,11 +1927,6 @@ git-tree-sha1 = "1e0228a030642014fe5cfe68c2c0a818f9e3f522"
 uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 version = "0.5.16"
 
-[[deps.ManualMemory]]
-git-tree-sha1 = "bcaef4fc7a0cfe2cba636d84cda54b5e4e4ca3cd"
-uuid = "d125e4d3-2237-4719-b19c-fa641b8a4667"
-version = "0.1.8"
-
 [[deps.MappedArrays]]
 git-tree-sha1 = "2dab0221fe2b0f2cb6754eaa743cc266339f527e"
 uuid = "dbb5928d-eab1-5f90-85c2-b9b0edb7c900"
@@ -1162,12 +1936,6 @@ version = "0.4.2"
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 version = "1.11.0"
-
-[[deps.MarkdownAST]]
-deps = ["AbstractTrees", "Markdown"]
-git-tree-sha1 = "465a70f0fc7d443a00dcdc3267a497397b8a3899"
-uuid = "d0879d2d-cac2-40c8-9cee-1863dc0c7391"
-version = "0.1.2"
 
 [[deps.MbedTLS]]
 deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "NetworkOptions", "Random", "Sockets"]
@@ -1187,9 +1955,9 @@ version = "0.3.2"
 
 [[deps.MetaGraphs]]
 deps = ["Graphs", "JLD2", "Random"]
-git-tree-sha1 = "e9650bea7f91c3397eb9ae6377343963a22bf5b8"
+git-tree-sha1 = "1130dbe1d5276cb656f6e1094ce97466ed700e5a"
 uuid = "626554b9-1ddb-594c-aa3c-2596fe9399a5"
-version = "0.8.0"
+version = "0.7.2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -1281,12 +2049,6 @@ version = "2.5.4+0"
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
 version = "0.8.5+0"
-
-[[deps.OpenSSH_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "OpenSSL_jll", "Zlib_jll"]
-git-tree-sha1 = "cb7acd5d10aff809b4d0191dfe1956c2edf35800"
-uuid = "9bd350c2-7e96-507f-8002-3f2e150b4e1b"
-version = "10.0.1+0"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
@@ -1391,6 +2153,12 @@ git-tree-sha1 = "f9501cc0430a26bc3d156ae1b5b0c1b47af4d6da"
 uuid = "eebad327-c553-4316-9ea0-9fa01ccd7688"
 version = "0.3.3"
 
+[[deps.PlanckFunctions]]
+deps = ["DelimitedFiles"]
+git-tree-sha1 = "a570a3ba3895d7b3ed87bd7f0f45faa1fa54aafe"
+uuid = "56edaee7-e77f-43d7-994d-8307b8de0a62"
+version = "1.0.0"
+
 [[deps.PlotThemes]]
 deps = ["PlotUtils", "Statistics"]
 git-tree-sha1 = "41031ef3a1be6f5bbbf3e8073f210556daeae5ca"
@@ -1423,29 +2191,11 @@ version = "1.40.13"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
-[[deps.PolyesterWeave]]
-deps = ["BitTwiddlingConvenienceFunctions", "CPUSummary", "IfElse", "Static", "ThreadingUtilities"]
-git-tree-sha1 = "645bed98cd47f72f67316fd42fc47dee771aefcd"
-uuid = "1d0040c9-8b98-4ee7-8388-3f51789ca0ad"
-version = "0.2.2"
-
-[[deps.Polynomials]]
-deps = ["LinearAlgebra", "OrderedCollections", "RecipesBase", "Requires", "Setfield", "SparseArrays"]
-git-tree-sha1 = "555c272d20fc80a2658587fb9bbda60067b93b7c"
-uuid = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
-version = "4.0.19"
-
-    [deps.Polynomials.extensions]
-    PolynomialsChainRulesCoreExt = "ChainRulesCore"
-    PolynomialsFFTWExt = "FFTW"
-    PolynomialsMakieCoreExt = "MakieCore"
-    PolynomialsMutableArithmeticsExt = "MutableArithmetics"
-
-    [deps.Polynomials.weakdeps]
-    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-    FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
-    MakieCore = "20f20a25-4f0e-4fdf-b5d1-57303727442b"
-    MutableArithmetics = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "d3de2694b52a01ce61a036f18ea9c0f61c4a9230"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.62"
 
 [[deps.PooledArrays]]
 deps = ["DataAPI", "Future"]
@@ -1476,6 +2226,10 @@ deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 version = "1.11.0"
 
+[[deps.Profile]]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+version = "1.11.0"
+
 [[deps.ProgressMeter]]
 deps = ["Distributed", "Printf"]
 git-tree-sha1 = "13c5103482a8ed1536a54c08d0e742ae3dca2d42"
@@ -1495,27 +2249,27 @@ version = "1.0.1"
 
 [[deps.Qt6Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Vulkan_Loader_jll", "Xorg_libSM_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_cursor_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "libinput_jll", "xkbcommon_jll"]
-git-tree-sha1 = "492601870742dcd38f233b23c3ec629628c1d724"
+git-tree-sha1 = "eb38d376097f47316fe089fc62cb7c6d85383a52"
 uuid = "c0090381-4147-56d7-9ebc-da0b1113ec56"
-version = "6.7.1+1"
+version = "6.8.2+1"
 
 [[deps.Qt6Declarative_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Qt6Base_jll", "Qt6ShaderTools_jll"]
-git-tree-sha1 = "e5dd466bf2569fe08c91a2cc29c1003f4797ac3b"
+git-tree-sha1 = "da7adf145cce0d44e892626e647f9dcbe9cb3e10"
 uuid = "629bc702-f1f5-5709-abd5-49b8460ea067"
-version = "6.7.1+2"
+version = "6.8.2+1"
 
 [[deps.Qt6ShaderTools_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Qt6Base_jll"]
-git-tree-sha1 = "1a180aeced866700d4bebc3120ea1451201f16bc"
+git-tree-sha1 = "9eca9fc3fe515d619ce004c83c31ffd3f85c7ccf"
 uuid = "ce943373-25bb-56aa-8eca-768745ed7b5a"
-version = "6.7.1+1"
+version = "6.8.2+1"
 
 [[deps.Qt6Wayland_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Qt6Base_jll", "Qt6Declarative_jll"]
-git-tree-sha1 = "729927532d48cf79f49070341e1d918a65aba6b0"
+git-tree-sha1 = "2766344a35a1a5ec1147305c4b343055d7c22c90"
 uuid = "e99dba38-086e-5de3-a5b1-6e4c66e897c3"
-version = "6.7.1+1"
+version = "6.8.2+0"
 
 [[deps.QuadGK]]
 deps = ["DataStructures", "LinearAlgebra"]
@@ -1589,12 +2343,6 @@ git-tree-sha1 = "4618ed0da7a251c7f92e869ae1a19c74a7d2a7f9"
 uuid = "dee08c22-ab7f-5625-9660-a9af2021b33f"
 version = "0.3.2"
 
-[[deps.RegistryInstances]]
-deps = ["LazilyInitializedFields", "Pkg", "TOML", "Tar"]
-git-tree-sha1 = "ffd19052caf598b8653b99404058fce14828be51"
-uuid = "2792f1a3-b283-48e8-9a74-f99dce5104f3"
-version = "0.1.0"
-
 [[deps.RelocatableFolders]]
 deps = ["SHA", "Scratch"]
 git-tree-sha1 = "ffdaf70d81cf6ff22c2b6e733c900c3321cab864"
@@ -1606,6 +2354,16 @@ deps = ["UUIDs"]
 git-tree-sha1 = "62389eeff14780bfe55195b7204c0d8738436d64"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.1"
+
+[[deps.Revise]]
+deps = ["CodeTracking", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "REPL", "Requires", "UUIDs", "Unicode"]
+git-tree-sha1 = "f6f7d30fb0d61c64d0cfe56cf085a7c9e7d5bc80"
+uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
+version = "3.8.0"
+weakdeps = ["Distributed"]
+
+    [deps.Revise.extensions]
+    DistributedExt = "Distributed"
 
 [[deps.Rmath]]
 deps = ["Random", "Rmath_jll"]
@@ -1638,17 +2396,6 @@ deps = ["PrecompileTools"]
 git-tree-sha1 = "fea870727142270bdf7624ad675901a1ee3b4c87"
 uuid = "fdea26ae-647d-5447-a871-4b548cad5224"
 version = "3.7.1"
-
-[[deps.SIMDTypes]]
-git-tree-sha1 = "330289636fb8107c5f32088d2741e9fd7a061a5c"
-uuid = "94e857df-77ce-4151-89e5-788b33177be4"
-version = "0.1.0"
-
-[[deps.SLEEFPirates]]
-deps = ["IfElse", "Static", "VectorizationBase"]
-git-tree-sha1 = "456f610ca2fbd1c14f5fcf31c6bfadc55e7d66e0"
-uuid = "476501e8-09a2-5ece-8869-fb82de89a1fa"
-version = "0.6.43"
 
 [[deps.Scratch]]
 deps = ["Dates"]
@@ -1743,23 +2490,6 @@ git-tree-sha1 = "be1cf4eb0ac528d96f5115b4ed80c26a8d8ae621"
 uuid = "cae243ae-269e-4f55-b966-ac2d0dc13c15"
 version = "0.1.2"
 
-[[deps.Static]]
-deps = ["CommonWorldInvalidations", "IfElse", "PrecompileTools"]
-git-tree-sha1 = "f737d444cb0ad07e61b3c1bef8eb91203c321eff"
-uuid = "aedffcd0-7271-4cad-89d0-dc628f76c6d3"
-version = "1.2.0"
-
-[[deps.StaticArrayInterface]]
-deps = ["ArrayInterface", "Compat", "IfElse", "LinearAlgebra", "PrecompileTools", "Static"]
-git-tree-sha1 = "96381d50f1ce85f2663584c8e886a6ca97e60554"
-uuid = "0d7ed370-da01-4f52-bd93-41d350b8b718"
-version = "1.8.0"
-weakdeps = ["OffsetArrays", "StaticArrays"]
-
-    [deps.StaticArrayInterface.extensions]
-    StaticArrayInterfaceOffsetArraysExt = "OffsetArrays"
-    StaticArrayInterfaceStaticArraysExt = "StaticArrays"
-
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
 git-tree-sha1 = "0feb6b9031bd5c51f9072393eb5ab3efd31bf9e4"
@@ -1838,9 +2568,9 @@ version = "1.0.1"
 
 [[deps.Tables]]
 deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "OrderedCollections", "TableTraits"]
-git-tree-sha1 = "f2c1efbc8f3a609aadf318094f8fc5204bdaf344"
+git-tree-sha1 = "598cd7c1f68d1e205689b1c2fe65a9f85846f297"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
-version = "1.12.1"
+version = "1.12.0"
 
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
@@ -1858,28 +2588,27 @@ deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 version = "1.11.0"
 
-[[deps.ThreadingUtilities]]
-deps = ["ManualMemory"]
-git-tree-sha1 = "2d529b6b22791f3e22e7ec5c60b9016e78f5f6bf"
-uuid = "8290d209-cae3-49c0-8002-c8c24d57dab5"
-version = "0.5.4"
-
 [[deps.TiffImages]]
-deps = ["ColorTypes", "DataStructures", "DocStringExtensions", "FileIO", "FixedPointNumbers", "IndirectArrays", "Inflate", "Mmap", "OffsetArrays", "PkgVersion", "PrecompileTools", "ProgressMeter", "SIMD", "UUIDs"]
-git-tree-sha1 = "02aca429c9885d1109e58f400c333521c13d48a0"
+deps = ["ColorTypes", "DataStructures", "DocStringExtensions", "FileIO", "FixedPointNumbers", "IndirectArrays", "Inflate", "Mmap", "OffsetArrays", "PkgVersion", "ProgressMeter", "SIMD", "UUIDs"]
+git-tree-sha1 = "38f139cc4abf345dd4f22286ec000728d5e8e097"
 uuid = "731e570b-9d59-4bfa-96dc-6df516fadf69"
-version = "0.11.4"
+version = "0.10.2"
 
 [[deps.TiledIteration]]
-deps = ["OffsetArrays", "StaticArrayInterface"]
-git-tree-sha1 = "1176cc31e867217b06928e2f140c90bd1bc88283"
+deps = ["OffsetArrays"]
+git-tree-sha1 = "5683455224ba92ef59db72d10690690f4a8dc297"
 uuid = "06e1c1a7-607b-532d-9fad-de7d9aa2abac"
-version = "0.5.0"
+version = "0.3.1"
 
 [[deps.TranscodingStreams]]
 git-tree-sha1 = "0c45878dcfdcfa8480052b6ab162cdd138781742"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.11.3"
+
+[[deps.Tricks]]
+git-tree-sha1 = "6cae795a5a9313bbb4f60683f7263318fc7d1505"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.10"
 
 [[deps.URIs]]
 git-tree-sha1 = "cbbebadbcc76c5ca1cc4b4f3b0614b3e603b5000"
@@ -1931,12 +2660,6 @@ git-tree-sha1 = "ca0969166a028236229f63514992fc073799bb78"
 uuid = "41fe7b60-77ed-43a1-b4f0-825fd5a5650d"
 version = "0.2.0"
 
-[[deps.VectorizationBase]]
-deps = ["ArrayInterface", "CPUSummary", "HostCPUFeatures", "IfElse", "LayoutPointers", "Libdl", "LinearAlgebra", "SIMDTypes", "Static", "StaticArrayInterface"]
-git-tree-sha1 = "4ab62a49f1d8d9548a1c8d1a75e5f55cf196f64e"
-uuid = "3d5dd08c-fd9d-11e8-17fa-ed2836048c2f"
-version = "0.21.71"
-
 [[deps.Vulkan_Loader_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Wayland_jll", "Xorg_libX11_jll", "Xorg_libXrandr_jll", "xkbcommon_jll"]
 git-tree-sha1 = "2f0486047a07670caad3a81a075d2e518acc5c59"
@@ -1961,17 +2684,11 @@ git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
 uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 version = "1.4.2"
 
-[[deps.WebP]]
-deps = ["CEnum", "ColorTypes", "FileIO", "FixedPointNumbers", "ImageCore", "libwebp_jll"]
-git-tree-sha1 = "aa1ca3c47f119fbdae8770c29820e5e6119b83f2"
-uuid = "e3aaa7dc-3e4b-44e0-be63-ffb868ccd7c1"
-version = "0.1.3"
-
 [[deps.WoodburyMatrices]]
 deps = ["LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "c1a7aa6219628fcd757dede0ca95e245c5cd9511"
+git-tree-sha1 = "5f24e158cf4cee437052371455fe361f526da062"
 uuid = "efce3f68-66dc-5838-9240-27a6d6f5f9b6"
-version = "1.0.0"
+version = "0.5.6"
 
 [[deps.WorkerUtilities]]
 git-tree-sha1 = "cd1659ba0d57b71a464a29e64dbc67cfe83d54e7"
@@ -2014,11 +2731,23 @@ git-tree-sha1 = "aa1261ebbac3ccc8d16558ae6799524c450ed16b"
 uuid = "0c0b7dd1-d40b-584c-a123-a41640f87eec"
 version = "1.0.13+0"
 
+[[deps.Xorg_libXcomposite_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libXfixes_jll"]
+git-tree-sha1 = "a630cfb0c2018a616d52f30e34cffa071ce93d42"
+uuid = "3c9796d7-64a0-5134-86ad-79f8eb684845"
+version = "0.4.6+0"
+
 [[deps.Xorg_libXcursor_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libXfixes_jll", "Xorg_libXrender_jll"]
 git-tree-sha1 = "6c74ca84bbabc18c4547014765d194ff0b4dc9da"
 uuid = "935fb764-8cf2-53bf-bb30-45bb1f8bf724"
 version = "1.2.4+0"
+
+[[deps.Xorg_libXdamage_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libXfixes_jll"]
+git-tree-sha1 = "534ed7d299469f3438b2c136d7beb0b50da88ce0"
+uuid = "0aeada51-83db-5f97-b67e-184615cfc6f6"
+version = "1.1.6+0"
 
 [[deps.Xorg_libXdmcp_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -2061,6 +2790,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll"]
 git-tree-sha1 = "7ed9347888fac59a618302ee38216dd0379c480d"
 uuid = "ea2f1a96-1ddc-540d-b46f-429655e07cfa"
 version = "0.9.12+0"
+
+[[deps.Xorg_libXtst_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libXext_jll", "Xorg_libXfixes_jll", "Xorg_libXi_jll"]
+git-tree-sha1 = "58c2e8f49733034d33b461d45a7e874b4135b644"
+uuid = "b6f176f1-7aea-5357-ad67-1d3e565ea1c6"
+version = "1.2.5+0"
 
 [[deps.Xorg_libxcb_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libXau_jll", "Xorg_libXdmcp_jll"]
@@ -2139,6 +2874,24 @@ git-tree-sha1 = "446b23e73536f84e8037f5dce465e92275f6a308"
 uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
 version = "1.5.7+1"
 
+[[deps.adwaita_icon_theme_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "hicolor_icon_theme_jll"]
+git-tree-sha1 = "60f62ea463bfd4288ce94d0eac5d521a6e62e10b"
+uuid = "b437f822-2cd6-5e08-a15c-8bac984d38ee"
+version = "3.33.93+0"
+
+[[deps.at_spi2_atk_jll]]
+deps = ["ATK_jll", "Artifacts", "JLLWrappers", "Libdl", "XML2_jll", "Xorg_libX11_jll", "at_spi2_core_jll"]
+git-tree-sha1 = "249ab7c4da34d86d3d66b524705b1c07fe96b815"
+uuid = "de012916-1e3f-58c2-8f29-df3ef51d412d"
+version = "2.38.0+0"
+
+[[deps.at_spi2_core_jll]]
+deps = ["Artifacts", "Dbus_jll", "Glib_jll", "JLLWrappers", "Libdl", "Xorg_libXtst_jll"]
+git-tree-sha1 = "6b71f6f0718495b66b07411a930f4090217e7946"
+uuid = "0fc3237b-ac94-5853-b45c-d43d59a06200"
+version = "2.56.2+0"
+
 [[deps.eudev_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "gperf_jll"]
 git-tree-sha1 = "431b678a28ebb559d224c0b6b6d01afce87c51ba"
@@ -2151,11 +2904,29 @@ git-tree-sha1 = "b6a34e0e0960190ac2a4363a1bd003504772d631"
 uuid = "214eeab7-80f7-51ab-84ad-2988db7cef09"
 version = "0.61.1+0"
 
+[[deps.gdk_pixbuf_jll]]
+deps = ["Artifacts", "Glib_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Xorg_libX11_jll", "libpng_jll"]
+git-tree-sha1 = "895f21b699121d1a57ecac57e65a852caf569254"
+uuid = "da03df04-f53b-5353-a52f-6a8b0620ced0"
+version = "2.42.13+0"
+
 [[deps.gperf_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "3cad2cf2c8d80f1d17320652b3ea7778b30f473f"
 uuid = "1a1c6b14-54f6-533d-8383-74cd7377aa70"
 version = "3.3.0+0"
+
+[[deps.hicolor_icon_theme_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "b458a6f6fc2b1a8ca74ed63852e4eaf43fb9f5ea"
+uuid = "059c91fe-1bad-52ad-bddd-f7b78713c282"
+version = "0.17.0+3"
+
+[[deps.iso_codes_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "4d295b7797afbe24ad5d0452f673b901a81c43c3"
+uuid = "bf975903-5238-5d20-8243-bc370bc1e7e5"
+version = "4.17.0+0"
 
 [[deps.libaom_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -2216,12 +2987,6 @@ git-tree-sha1 = "490376214c4721cdaca654041f635213c6165cb3"
 uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
 version = "1.3.7+2"
 
-[[deps.libwebp_jll]]
-deps = ["Artifacts", "Giflib_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libglvnd_jll", "Libtiff_jll", "libpng_jll"]
-git-tree-sha1 = "ccbb625a89ec6195856a50aa2b668a5c08712c94"
-uuid = "c5f90fcd-3b7e-5836-afba-fc50a0988cb2"
-version = "1.4.0+0"
-
 [[deps.mtdev_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "814e154bdb7be91d78b6802843f76b6ece642f11"
@@ -2261,3 +3026,99 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Wayland_jll", "Wayland_protocols_j
 git-tree-sha1 = "c950ae0a3577aec97bfccf3381f66666bc416729"
 uuid = "d8fb68d0-12a3-5cfd-a85a-d49703b185fd"
 version = "1.8.1+0"
+"""
+
+# ╔═╡ Cell order:
+# ╟─4460f260-f65f-446d-802c-f2197f4d6b27
+# ╟─79b31b84-afe0-4aac-90bf-97e8cbfff5e2
+# ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
+# ╟─fc6af4b0-1127-11f0-1b66-a59d87c5b141
+# ╟─051044c5-760c-4b60-90fc-82a347c3b6bc
+# ╟─4f93b7ba-3488-446d-8043-718fbdc5b808
+# ╟─215ed2f4-71ba-4cb5-b198-677d0d7ffb38
+# ╟─f6c1be87-94d2-4b08-a52d-6eb637192ee8
+# ╟─870113c3-b439-4d34-90d8-fdd8a158f9dd
+# ╟─dd4a9e93-0d4e-497a-8ca4-0e8f36205ffb
+# ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
+# ╟─cd12d201-3dac-48c7-bd53-7c76944f5816
+# ╟─9fe323c0-9afc-43fd-bc21-1c45b73d50e0
+# ╟─794ebd5e-e9e0-4772-98a9-43e20c7ef4da
+# ╟─429cf33f-4422-44f0-beb8-5a1908a72273
+# ╟─7f5ec486-40d7-4e7d-9ad8-4740a1b0be22
+# ╟─13f01881-2645-429b-9856-6c3f19c0ad48
+# ╟─854731c1-7a34-4066-aa74-01629c87d75d
+# ╟─aab55f93-1f3e-4d43-b54c-4143d6a8428d
+# ╟─46e42b10-1213-48f8-a614-38c1ff86566c
+# ╠═fd30f772-f6bc-4716-982e-e9c7fd5d5e97
+# ╟─9f55febb-b047-4b22-8575-209d45354d51
+# ╟─4feea216-ee48-42a3-b4ba-454f28ff690a
+# ╟─5a212007-c0e8-4b1b-94d1-30bdb1efdb9c
+# ╟─1644d6a3-8f11-4ca2-8613-b9e1d4896af0
+# ╟─3ae0c3df-7b50-4b74-b802-71931731753a
+# ╟─c12addac-2880-4758-b560-42db2941a77c
+# ╟─dde0003d-0fe3-41da-a582-27f88a57d2c5
+# ╟─3fbc6b45-974e-430e-a4e6-960323015e74
+# ╟─ca5eea20-2bb3-4407-aa09-af8de2332b84
+# ╟─8b6f604d-157b-42cd-a0c6-8bd5562b47ef
+# ╟─38a45961-0ffb-43d4-aa24-36d503ed4618
+# ╟─1467b184-22ac-4038-ad1b-f084d4443b27
+# ╟─c87a830a-f48a-4444-81bc-3efd69a130ad
+# ╟─768535e0-a514-4dff-ac8b-0d7ca126149c
+# ╟─5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
+# ╟─6d37916c-7895-49d3-b8a3-c8661050ebcb
+# ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
+# ╟─c67290fc-6291-4f3e-a660-a3c4afa3a5e3
+# ╟─71eb240a-5a45-4bf3-b35c-a5820ca6da6c
+# ╟─4e1a5050-59b0-4d24-98bb-1520c06b28c5
+# ╟─42a7b186-aa04-4249-a129-bf925f181008
+# ╟─e1ccfd33-3d54-4249-86f1-381a1ef90615
+# ╟─b096c4f2-9dce-409d-874a-a851f577bf92
+# ╟─59f9a7f2-9601-431c-a897-543fa25c64c4
+# ╟─39e50296-21ff-4407-894f-2a380dc51e21
+# ╟─32848d3c-866b-4a6e-be07-ff6aae73d754
+# ╟─ea232c80-261b-4dc2-8891-2b7090f36760
+# ╠═8a558860-00d8-4f87-b900-4620881ade90
+# ╟─e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
+# ╠═b4ce12e3-29ec-41ac-89d3-06d08ef2beca
+# ╟─cc909b53-ed4d-44a1-a410-ff25533afc2d
+# ╟─d5b6f453-5e92-41e6-a45f-cb75660bc198
+# ╟─a76e0a08-393e-472a-8df5-0650eb6a60af
+# ╟─6e728ea6-38be-437a-96b4-9fa084f8fec5
+# ╟─0badf26a-38fa-45be-9704-d4e80b12a9cb
+# ╠═f8154558-d0cb-4b27-8c0d-b5cac07a099c
+# ╟─39e31290-e7b5-47ce-ac46-aebc33ddfa54
+# ╟─9c13d94e-ca2f-41d6-922a-428bb7a476c8
+# ╟─96ad6e27-52dd-41aa-b115-f852049a485a
+# ╟─7e484bde-1f2f-4d32-87c6-64ff884dc272
+# ╟─304ac75d-bdc4-41de-bd2f-d1843ecd22f9
+# ╟─10954f10-9414-4839-872f-c2516d5d8e4e
+# ╟─9d79ba97-5aa8-4d60-8cf4-523a28b2e5ae
+# ╟─6c78d805-4b14-4b7f-ad96-439d2a56605e
+# ╟─fcb71c81-8ee5-4cf7-b293-ab97261d7213
+# ╟─6adfae4d-5137-4692-b9f3-3793c4c76202
+# ╟─0cdb27f4-9796-479b-b43f-b349eaabc049
+# ╟─d91b478b-57fa-4f26-a05c-649097202102
+# ╟─f1512fc5-4a7a-4274-9d42-3057d9aec04f
+# ╟─2925fafa-4722-4335-ba49-77c6a8fb110b
+# ╟─e7e6884a-1145-4a01-a429-6c4a84e7ea33
+# ╟─68b33b39-5ef5-4560-b4b2-1fe2f43a3628
+# ╟─8a132aba-aa8a-428a-84a2-0ab6e5e2b891
+# ╟─f357bbd8-4d81-4f9e-870e-cf57124c5042
+# ╟─821a7c95-f4da-410d-b780-111abb6d0db5
+# ╟─febd591e-bb9f-4b21-93c8-aafd4c81ce12
+# ╟─0044c49b-1c72-4f78-97ee-87932c97d2a9
+# ╟─b640fcd0-3e49-471d-b281-87137a781eba
+# ╟─8b2fdcf1-cd0e-4234-a24a-afa597552f9e
+# ╟─054b15d8-a4e6-42d4-b097-938d05cbb198
+# ╟─7a00ce43-94e2-4f68-b651-b57bf7d6ab05
+# ╟─20cf3079-1115-451b-870d-2457a5cfd333
+# ╟─0e05f2b9-37d2-4626-b50c-4c8d48022904
+# ╟─dc5be80b-9a5e-42f2-b75f-b338292851ee
+# ╟─da18cd4d-73b3-491f-b9f0-d374b92ed8d2
+# ╠═8b017646-7a75-4973-a204-d74a42ffc97f
+# ╟─4d377da2-e1b2-4aa3-a2c5-6d176ae8905f
+# ╟─9ba9540f-a2e2-40c4-99d5-940ec2e2839b
+# ╟─577897c4-c042-495e-a10e-9ac07ab2bf2b
+# ╟─d7abe315-ad5e-485e-8873-fe6f3cd241b5
+# ╟─00000000-0000-0000-0000-000000000001
+# ╟─00000000-0000-0000-0000-000000000002
