@@ -28,9 +28,7 @@ The following figures show the initial image with several separate patterns and 
   <img src="./assets/multiple_patterns_hist.png" width="220"/> 
 </p>
 
- Main functionality of the package is demonstrated in the Pluto notebook [notebook](https://github.com/Manarom/ThermovisorImages.jl/blob/main/notebooks).
-
-Static version of this notebook is available at <a href="./docs/build/ThermovisorImages-test.html">ThermpvisorImages-test</a>
+ Main functionality of the package is demonstrated in the Pluto [notebook](https://github.com/Manarom/ThermovisorImages.jl/blob/main/notebooks). Static version of this notebook is available at [ThermovisorImages-test](https://manarom.github.io/ThermovisorImages.jl/ThermovisorImages-test.html)
 
   Full documentation is available at  [documentation](https://manarom.github.io/ThermovisorImages.jl/)
 

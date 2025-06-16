@@ -258,29 +258,7 @@ function fill_vect!(x::AbstractVector, c::CentredObj)
     return x
 end
 
-"""
-    image_fill_discr(image::AbstractMatrix,c::CentredObj)
 
-Function returns the function to evaluate the discrepancy  between 
-`CentredObj` and the matrix, this function is used during the fitting procedure 
-"""    
-function image_fill_discr(image::AbstractMatrix,c::CentredObj)
-     im_copy = copy(image)   
-     return x-> begin
-                image_discr(image, fill_im!(im_copy,fill_from_vect!(c,x)))
-        end
-end
-struct ImCentDiscr{T} where T<:CentredObj
-    image_target::AbstractMatrix
-    image_fillable::AbstractMatrix
-    sz # image size
-    c::T
-end
-(icd::ImCentDiscr)(x::AbstractVector) = begin
-    fill_from_vect!(icd.c,x)
-    fill_im!(icd.image_fillable,icd.c)
-    icd.image
-end
 # arithmetic operations on CentredObj
 """
     Base.isless(c1::CentredObj,c2::CentredObj)
@@ -783,4 +761,36 @@ function radial_distribution(imag::AbstractMatrix,c::CentredObj,
             end
     end
     return (first_columnn_along_line,radial_distrib_matrix)
+end
+
+"""
+    image_fill_discr(image::AbstractMatrix,c::CentredObj)
+
+Function returns the function to evaluate the discrepancy  between 
+`CentredObj` and the matrix, this function is used during the fitting procedure 
+"""    
+function image_fill_discr(image::AbstractMatrix,c::CentredObj)
+     discr_obj =ImCentDiscr(image,c)   
+     return discr_obj
+                #image_discr(image, fill_im!(im_copy,fill_from_vect!(c,x)))
+
+end
+struct ImCentDiscr{T<:CentredObj}
+    image_target::AbstractMatrix
+    image_fillable::AbstractMatrix
+    c::T
+    ImCentDiscr(imag,c::T) where T<:CentredObj=  begin
+        new{T}(imag,copy(imag),c)
+    end
+end
+(icd::ImCentDiscr)(x::AbstractVector) = begin
+    fill_from_vect!(icd.c,x)
+    s = area(icd.c)
+    fill_im!(icd.image_fillable,icd.c)
+    s_im = sum(icd.image_fillable)
+    return s/s_im  + image_discr(icd.image_target,icd.image_fillable)
+end
+(icd::ImCentDiscr{CircleObj})(x::AbstractVector) = begin
+    fill_im!(icd.image_fillable,fill_from_vect!(icd.c,x))
+    return image_discr(icd.image_target,icd.image_fillable)
 end
