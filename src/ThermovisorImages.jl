@@ -149,7 +149,7 @@ Kelvins otherwise.
 To find a new temperature value `T` the function solves a non-linear equation. If both λ_left and
 λ_right are not equal and none of them is `nothing`, the following equation is solved:
 
-`new_emissivity` ⋅∫iᵦ(λ,T) = `image_emissivity` ⋅∫iᵦ(λ,Tₘ)
+`new_emissivity` ⋅∫iᵦ(λ,T)dλ = `image_emissivity` ⋅∫iᵦ(λ,Tₘ)dλ
 
 Here `iᵦ` is the Planck spectral radiance, Tₘ is the measured temperature (value of pixel intensity).
 The integration is preformed over the `[λ_left,λ_right]` spectral range with the help of
@@ -180,12 +180,14 @@ function recalculate_with_new_emissivity!(image::AbstractArray,new_emissivity::F
 
         optimizer = Optim.Brent()
         #options = DEFAULT_TEMPERATURE_FITTING_OPTIONS[]
-        Threads.@threads for (i,t) in enumerate(image)
-                t_meas= is_in_kelvins ? t : t + Planck.Tₖ
+        Threads.@sync for (i,t) in enumerate(image)
+            Threads.@spawn begin
+                t_meas= is_in_kelvins ? t : to_K(t)
                 t_init =  t_meas*(image_emissivity/new_emissivity)^0.25 
                 func = thermal_discrepancy_fun(t_meas,λ_left,λ_right,image_emissivity,new_emissivity)
                 optim_out = optimize(func,t_init/2,1.5*t_init,optimizer,rel_tol=rel_tol)#,optimizer,)
                 image[i] = is_in_kelvins ? optim_out.minimizer : optim_out.minimizer - Planck.Tₖ
+            end
         end  
         return image
     end
@@ -224,7 +226,7 @@ be the emissvity settled during measurements. Both `marker` and
 """
 function recalculate_with_new_emissivity!(image::AbstractArray,marker::MarkeredImage,
         label::Int,new_emissivity::Float64,image_emissivity::Float64;
-        kwargs...)
+                                                        kwargs...)
         @assert size(image) == size(marker) "Both `image` and `marker` should be of the same size"
         im_view = m_view(image,marker,label)
         recalculate_with_new_emissivity!(im_view,new_emissivity,image_emissivity;kwargs...)
@@ -237,5 +239,59 @@ Checks if the file with `file_name` has an appropriate name for thermovisor temp
 """
 is_temperature_file(file_name::AbstractString)=match(r"_T([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]).csv",file_name)
     
-#
+"""
+    convert_temperature_to_emissivity(image::AbstractMatrix,
+                                            real_temperature::Float64,
+                                            image_emissivity::Float64;
+                                            λ_left::Union{Float64,Nothing}=14.0,
+                            λ_right::Union{Float64,Nothing}=14.5,
+                            is_in_kelvins::Bool=false)
+
+Evaluates the emissivity, assuming the whole `image` to be of the same temperature
+`real_temperature`.
+If both λ_left and λ_right are not equal and none of them is `nothing` the emissivity `ϵ` is calculated using:
+
+ϵ =  `image_emissivity`⋅∫iᵦ(λ,Tᵣ)dλ/∫iᵦ(λ,Tₘ)dλ
+
+Here `iᵦ` is the Planck spectral radiance, Tₘ is the measured temperature (value of pixel temperature),
+Tᵣ is the real temperature of the surface.
+The integration is preformed over the `[λ_left,λ_right]` spectral range with the help of
+`band_power` function provied by the `PlanckFunctions` package. 
+    
+If one of (but not both) λ_left and λ_right is set to `nothing` or both of them are equal,
+than the following equaion is solved:
+
+ϵ =  `image_emissivity`⋅iᵦ(λ,Tᵣ)/iᵦ(λ,Tₘ)
+
+"""
+function convert_temperature_to_emissivity(image::AbstractMatrix,
+                                            real_temperature::Float64,
+                                            image_emissivity::Float64;
+                                            λ_left::Union{Float64,Nothing}=14.0,
+                            λ_right::Union{Float64,Nothing}=14.5,
+                            is_in_kelvins::Bool=false)
+         e_out = Matrix{Float64}(undef,size(image)...)
+         fun_to = to_emissivity_fun(real_temperature,image_emissivity,λ_left,λ_right)
+         Threads.@threads for (ii,t_meas) in collect(enumerate(image))
+            Threads.@spawn begin
+                t_meas = is_in_kelvins ? t_meas : to_K(t_meas)
+                e_out[ii] = fun_to(t_meas)
+            end
+         end
+         return e_out
+         
+    end
+    to_K(t) = t + Planck.Tₖ
+    function to_emissivity_fun(t_meas::Float64,
+                            e_in::Float64,
+                            λ_left::Union{Float64,Nothing},
+                            λ_right::Union{Float64,Nothing})
+
+        is_single_wavelength = (isnothing(λ_left) && !isnothing(λ_right)) || (!isnothing(λ_left) && isnothing(λ_right)) || (λ_left == λ_right) 
+        if is_single_wavelength
+            λ_left = isnothing(λ_left) ? λ_right : λ_left
+            return t->e_in*Planck.ibb(λ_left ,t_meas)/Planck.ibb(λ_left, t)
+        end
+        return t->e_in*Planck.band_power(t_meas, λₗ=λ_left,  λᵣ=λ_right)/Planck.band_power(t, λₗ=λ_left,  λᵣ=λ_right)
+    end
 end

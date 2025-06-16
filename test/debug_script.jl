@@ -168,7 +168,7 @@ end
 
 using .ThermovisorImages
 
-im = read_temperature_file(raw"D:\JuliaDepoth\dev\ThermovisorData.jl\thermal images\S_T500.csv")
+im = read_temperature_file(raw"D:\JuliaDepoth\dev\ThermovisorData.jl\thermal images\T500.csv")
 roi = ThermovisorImages.fit_all_patterns(im)
 
 

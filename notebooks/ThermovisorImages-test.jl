@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.9
+# v0.20.6
 
 using Markdown
 using InteractiveUtils
@@ -694,7 +694,20 @@ hcat(before_sorting,after_sorting)
 
 # ╔═╡ 20cf3079-1115-451b-870d-2457a5cfd333
 md""" 
-### 9. Recalculation of the temperature field of the surface and the area of interest with a new value of emissivity
+### 9. Recalculation of the temperature field of the surface and the area of interest with a new value of emissivity. 
+
+As far as infrared cameras measure radiance from a surface, which depends on emissivity and temperature. When emissivity is changed (e.g., corrected or updated), the temperature must be recalculated so that the modeled radiance matches the measured radiance. This recalculation is necessary because emissivity can vary with material, surface condition, and wavelength, and incorrect emissivity leads to errors in temperature measurement 
+
+The main idea is to recalculate the temperature in such a way that the measured radiance within the infrared camera’s spectral range remains the same for two different surface emissivities (initial and modified).
+
+To obtain the new temperature ``T_{new}``, the package solves the following nonlinear equation using univariate optimization method:
+
+``\epsilon_{initial} \int_{\lambda_{left}}^{\lambda_{right}}I_{bb}(\lambda,T_{initial})d\lambda =\epsilon_{new} \int_{\lambda_{left}}^{\lambda_{right}}I_{bb}(\lambda,T_{new})d\lambda``
+
+where ``\lambda_{left}`` and ``\lambda_{right}`` define the working range of thermographic camera, ``T_{initial}`` and ``\epsilon_{initial}`` are the temperature and emissivity at each point of image,  respectively, ``\epsilon_{new}`` is a new emissivity.
+
+
+**ThermovisorImages.jl** package provides `recalculate_with_new_emissivity` function to accomplish this task. This function has three methods:
 
 ```julia
 recalculate_with_new_emissivity!(image::AbstractArray,new_emissivity::Float64,
@@ -702,16 +715,72 @@ recalculate_with_new_emissivity!(image::AbstractArray,new_emissivity::Float64,
                                         λ_left::Union{Float64,Nothing}=14.0,
                                         λ_right::Union{Float64,Nothing}=14.5,
                                         is_in_kelvins::Bool=false,
-                                        rel_tol::Float64=1e-3) # (1)
+                                        rel_tol::Float64=1e-3) 				 #(1)
 recalculate_with_new_emissivity!(image::AbstractArray,c::CentredObj,
-									new_emissivity::Float64, image_emissivity::Float64;
-									kwargs...) # (2)
+									new_emissivity::Float64, image_emissivity::Float64;kwargs...)     #(2)
 recalculate_with_new_emissivity!(image::AbstractArray,marker::MarkeredImage,
         								label::Int,new_emissivity::Float64,
-										image_emissivity::Float64;
-										kwargs...) # (3)
+										image_emissivity::Float64;kwargs...) #(3)
 ```
+First method does not depend on package's internals and recalculates the whole image (or image view provided externally). `new_emissivity` and `image_emissivity` are the initial emissivity of the image and new emissivity for which the temperature should be adjusted. If both λ_left and λ_right are equal, function uses single wavelegth equation:
+
+``\epsilon_{initial} I_{bb}(\lambda_{fixed},T_{initial}) =\epsilon_{new}I_{bb}(\lambda,T_{new})``
+
+Singlewavelength version is much faster than the one with band integration, but less accurate.
+
+Methods (2) and (3) both allow to recalculate the image within the specified region, (2)  - recalculates the temperature within the ROI and (3)  - within the pattern, labeled with the `label` value.
+
 """
+
+# ╔═╡ 0e05f2b9-37d2-4626-b50c-4c8d48022904
+md"""
+Select thermal image by tag $(@bind temp_to_recalc Select([v for v in files_in_dir_tags]))
+"""
+
+# ╔═╡ dc5be80b-9a5e-42f2-b75f-b338292851ee
+#reading selected file
+begin 
+	im_to_recalc = ThermovisorImages.read_temperature_file(files_in_dir[temp_to_recalc][2])
+	roi_obj = ThermovisorImages.fit_all_patterns(im_to_recalc)
+end;
+
+# ╔═╡ da18cd4d-73b3-491f-b9f0-d374b92ed8d2
+@bind values confirm(PlutoUI.combine() do Child
+md"""
+	Infrared camera settings:
+	
+	``\lambda_{left}`` = $(Child(Slider(0.5:1e-1:30,default=14.0,show_value=true)))
+	
+	``\lambda_{right}`` = $(Child(Slider(0.5:1e-1:30,default=14.5,show_value=true)))
+
+	``new \ emissivity`` = $(Child(Slider(0.01:1e-2:1.0,default=0.70,show_value=true)))	
+	
+	``\epsilon_{image}`` = $(Child(Slider(0.01:1e-2:1.0,default=1.0,show_value=true)))
+
+	Use single wavelength ? (calculating in band can be time consuming) = $(Child(CheckBox(true)))
+	
+	"""
+
+end)
+
+# ╔═╡ 8b017646-7a75-4973-a204-d74a42ffc97f
+args_t = NamedTuple{(:λ_left,:λ_right,:new_emissivity,:image_emissivity)}( !values[5] ? values[1:4] :  (values[1],values[1],values[3:4]...) )
+
+# ╔═╡ 4d377da2-e1b2-4aa3-a2c5-6d176ae8905f
+md"Left  - initial temperature distribution, right - recalculated "
+
+# ╔═╡ 9ba9540f-a2e2-40c4-99d5-940ec2e2839b
+begin
+	im_copy = copy(im_to_recalc.initial)
+	ThermovisorImages.recalculate_with_new_emissivity!(im_copy,roi_obj[],args_t.new_emissivity, args_t.image_emissivity;λ_left = args_t.λ_left, λ_right = args_t.λ_right)
+	heatmap(hcat(im_to_recalc.initial,im_copy),aspect_ratio=:equal,title = "Left - initial, right - recalculated")
+end
+
+# ╔═╡ 577897c4-c042-495e-a10e-9ac07ab2bf2b
+md"Difference between initial temperature distribution and recaculated for the new value of emissivity"
+
+# ╔═╡ d7abe315-ad5e-485e-8873-fe6f3cd241b5
+heatmap(im_copy .-im_to_recalc.initial,title="Temperature difference")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2977,7 +3046,7 @@ version = "1.8.1+0"
 # ╟─429cf33f-4422-44f0-beb8-5a1908a72273
 # ╟─7f5ec486-40d7-4e7d-9ad8-4740a1b0be22
 # ╟─13f01881-2645-429b-9856-6c3f19c0ad48
-# ╠═854731c1-7a34-4066-aa74-01629c87d75d
+# ╟─854731c1-7a34-4066-aa74-01629c87d75d
 # ╟─aab55f93-1f3e-4d43-b54c-4143d6a8428d
 # ╟─46e42b10-1213-48f8-a614-38c1ff86566c
 # ╠═fd30f772-f6bc-4716-982e-e9c7fd5d5e97
@@ -3038,10 +3107,18 @@ version = "1.8.1+0"
 # ╟─821a7c95-f4da-410d-b780-111abb6d0db5
 # ╟─febd591e-bb9f-4b21-93c8-aafd4c81ce12
 # ╟─0044c49b-1c72-4f78-97ee-87932c97d2a9
-# ╠═b640fcd0-3e49-471d-b281-87137a781eba
+# ╟─b640fcd0-3e49-471d-b281-87137a781eba
 # ╟─8b2fdcf1-cd0e-4234-a24a-afa597552f9e
 # ╟─054b15d8-a4e6-42d4-b097-938d05cbb198
 # ╟─7a00ce43-94e2-4f68-b651-b57bf7d6ab05
-# ╠═20cf3079-1115-451b-870d-2457a5cfd333
+# ╟─20cf3079-1115-451b-870d-2457a5cfd333
+# ╟─0e05f2b9-37d2-4626-b50c-4c8d48022904
+# ╟─dc5be80b-9a5e-42f2-b75f-b338292851ee
+# ╟─da18cd4d-73b3-491f-b9f0-d374b92ed8d2
+# ╟─8b017646-7a75-4973-a204-d74a42ffc97f
+# ╟─4d377da2-e1b2-4aa3-a2c5-6d176ae8905f
+# ╟─9ba9540f-a2e2-40c4-99d5-940ec2e2839b
+# ╟─577897c4-c042-495e-a10e-9ac07ab2bf2b
+# ╟─d7abe315-ad5e-485e-8873-fe6f3cd241b5
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
