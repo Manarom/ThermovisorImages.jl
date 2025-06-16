@@ -1,6 +1,6 @@
 module ThermovisorImages
     using Images,ImageShow,ImageIO
-    using Plots,CSV
+    using CSV,Plots
     using Colors, ColorVectorSpace
     using Dates,Statistics,LinearAlgebra
     #using ImageSegmentation,IndirectArrays

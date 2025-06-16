@@ -266,9 +266,21 @@ Function returns the function to evaluate the discrepancy  between
 """    
 function image_fill_discr(image::AbstractMatrix,c::CentredObj)
      im_copy = copy(image)   
-     return x-> image_discr(image, fill_im!(im_copy,fill_from_vect!(c,x)))
+     return x-> begin
+                image_discr(image, fill_im!(im_copy,fill_from_vect!(c,x)))
+        end
 end
-
+struct ImCentDiscr{T} where T<:CentredObj
+    image_target::AbstractMatrix
+    image_fillable::AbstractMatrix
+    sz # image size
+    c::T
+end
+(icd::ImCentDiscr)(x::AbstractVector) = begin
+    fill_from_vect!(icd.c,x)
+    fill_im!(icd.image_fillable,icd.c)
+    icd.image
+end
 # arithmetic operations on CentredObj
 """
     Base.isless(c1::CentredObj,c2::CentredObj)
@@ -307,7 +319,8 @@ Fills CentreObj parameters from the vector [center_index_1,center_index_2,dimens
 function fill_from_vect!(c::CentredObj, v::AbstractVector)
     @assert length(c) == length(v)
     l_d = length(c.dimensions)
-    map!(int_floor,c.center,v[1:2])
+    c.center[1] = int_floor(v[1])
+    c.center[2] = int_floor(v[2])
     map!(int_floor_abs,c.dimensions,v[3:2+l_d])
     return c
 end
@@ -331,7 +344,10 @@ perimeter(c::CircleObj) = 2*π*radius(c)
 radius(c::CircleObj) = diameter(c)/2
 side(c::CircleObj) = diameter(c)
 area(c::CircleObj) = π*radius(c)^2
-is_within(c::CircleObj,inds::AbstractVector) = sqrt(sum(abs2  , c.center .- inds)) < radius(c)
+is_within(c::CircleObj,inds::AbstractVector) = begin 
+    #sqrt(sum(abs2  , c.center .- inds))
+    return sqrt(^(c.center[1] - inds[1],2.0) + ^(c.center[2] - inds[2],2.0)) < radius(c)
+end
 Base.size(c::CircleObj) = (diameter(c),diameter(c))
 """
     fill_x0!(x0,im_bin::FlagMatrix,::CircleObj)
@@ -396,15 +412,17 @@ Base.size(c::SquareObj) = (side(c),side(c))
 
 is_within(c::SquareObj,inds::AbstractVector) = begin
     a = side(c)/2
-    c.center[1]-a <=inds[1]<=c.center[1]+a   && c.center[2]-a <=inds[2]<=c.center[2]+a
+    abs(c.center[1] - inds[1]) <= a && abs(c.center[2] - inds[2]) <= a
+    #(c.center[1]-a) <=inds[1] <=c.center[1]+a   && c.center[2]-a <=inds[2]<=c.center[2]+a
 end
 
 function fill_x0!(x0,im_bin::FlagMatrix,::SquareObj)
     
     min_ind = findfirst(im_bin)
     max_ind = findlast(im_bin)
-    starting_side = sqrt(sum(abs2, Tuple.(max_ind - min_ind)))
-   x0 .= [collect(x/2 for x in Tuple.(max_ind + min_ind))..., starting_side]
+    x0[end] = sqrt(sum(abs2, Tuple.(max_ind - min_ind)))
+    x0[1] =0.5*(min_ind[1] + max_ind[1])
+    x0[2] = 0.5*(min_ind[2] + max_ind[2])
 
 end  
 

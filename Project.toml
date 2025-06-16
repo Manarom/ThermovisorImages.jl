@@ -34,6 +34,7 @@ FileIO = "1.17.0"
 FileTypes = "0.1.0"
 LinearAlgebra = "1.11.0"
 PlanckFunctions = "1.0.0"
+Plots = "1.40.13"
 Statistics = "1.11.1"
 StatsBase = "0.34.5"
 
