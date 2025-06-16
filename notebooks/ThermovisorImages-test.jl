@@ -745,7 +745,7 @@ begin
 end;
 
 # ╔═╡ da18cd4d-73b3-491f-b9f0-d374b92ed8d2
-@bind values confirm(PlutoUI.combine() do Child
+@bind args_in confirm(PlutoUI.combine() do Child
 md"""
 	Infrared camera settings:
 	
@@ -764,7 +764,7 @@ md"""
 end)
 
 # ╔═╡ 8b017646-7a75-4973-a204-d74a42ffc97f
-args_t = NamedTuple{(:λ_left,:λ_right,:new_emissivity,:image_emissivity)}( !values[5] ? values[1:4] :  (values[1],values[1],values[3:4]...) )
+args_t = NamedTuple{(:λ_left,:λ_right,:new_emissivity,:image_emissivity)}( !args_in[5] ? args_in[1:4] :  (args_in[1],args_in[1],args_in[3:4]...) )
 
 # ╔═╡ 4d377da2-e1b2-4aa3-a2c5-6d176ae8905f
 md"Left  - initial temperature distribution, right - recalculated "
@@ -3115,7 +3115,7 @@ version = "1.8.1+0"
 # ╟─0e05f2b9-37d2-4626-b50c-4c8d48022904
 # ╟─dc5be80b-9a5e-42f2-b75f-b338292851ee
 # ╟─da18cd4d-73b3-491f-b9f0-d374b92ed8d2
-# ╟─8b017646-7a75-4973-a204-d74a42ffc97f
+# ╠═8b017646-7a75-4973-a204-d74a42ffc97f
 # ╟─4d377da2-e1b2-4aa3-a2c5-6d176ae8905f
 # ╟─9ba9540f-a2e2-40c4-99d5-940ec2e2839b
 # ╟─577897c4-c042-495e-a10e-9ac07ab2bf2b

@@ -1,10 +1,8 @@
 ```@raw html
-<p>The static version (with no interactive elements) of Pluto notebook with <b>ThermovisorData.jl</b> usage is available at: <a href="../ThermovisorData-test.html">ThermovisorData-test.html</a>
+<p>The static version (with no interactive elements) of Pluto notebook with <b>ThermovisorImages.jl</b> usage is available at: <a href="../ThermovisorImages-test.html">ThermovisorImages.html</a>
 .</p
 ```
-
-
-Notebook file with `ThermovisorImzges-test.jl` usage examples are available at [Pluto notebooks](https://github.com/Manarom/ThermovisorImages.jl/blob/main/notebooks).
+Notebook file itself is available at [Pluto notebooks](https://github.com/Manarom/ThermovisorImages.jl/blob/main/notebooks).
 
 To run these notebooks, you need:
 1) Install `julia` language itself from its official [download page](https://julialang.org/downloads) 
