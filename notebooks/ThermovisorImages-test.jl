@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.9
+# v0.20.6
 
 using Markdown
 using InteractiveUtils
@@ -124,6 +124,7 @@ end
 #reading selected file
 begin 
 	rescaled_image = ThermovisorImages.read_temperature_file(files_in_dir[temp_to_load][2])
+	rgb_image_initial = ThermovisorImages.draw(rescaled_image)
 end;
 
 # ╔═╡ 429cf33f-4422-44f0-beb8-5a1908a72273
@@ -175,8 +176,7 @@ begin
 		append!(test_coord_vect,test_side_b)
 	end
 	test_centre_obj = ThermovisorImages.obj_from_vect(test_mask_type,test_coord_vect)
-	rgb_image_initial = ThermovisorImages.draw(rescaled_image,test_centre_obj,show_cross = true,fill=false)
-	#imag_initial_show = ThermovisorImages.draw_line_within_mask!(rgb_image_initial,test_centre_obj,0,10)
+	ThermovisorImages.draw!(copy(rgb_image_initial),test_centre_obj,show_cross = true,fill=false)
 end
 
 # ╔═╡ 13f01881-2645-429b-9856-6c3f19c0ad48
@@ -348,7 +348,7 @@ begin
 	end
 	centre_obj = ThermovisorImages.obj_from_vect(mask_type,coord_vect)
 	#is_make_obj_selfy ? centre_obj_image = draw(centre_obj,thickness=25) : nothing
-end
+end;
 
 # ╔═╡ 768535e0-a514-4dff-ac8b-0d7ca126149c
 # fitting the loaded image
@@ -385,7 +385,11 @@ Upper figure shows the image, ROI and inclined line which goes through ROI's cen
 begin
 	rgb_image = ThermovisorImages.draw(image_to_show,fitted_obj,show_cross = true)
 	imag = ThermovisorImages.draw_line_within_mask!(rgb_image,fitted_obj,direction_angle,line_length/mm_per_pixel[])
+	centre_obj
 end
+
+# ╔═╡ 54c27e44-d34e-49bb-9ca4-2a8218f463d5
+imag
 
 # ╔═╡ b096c4f2-9dce-409d-874a-a851f577bf92
 begin 
@@ -458,7 +462,7 @@ end;
 # ╔═╡ cc909b53-ed4d-44a1-a410-ff25533afc2d
 md"""
 ###  7,8. Fitting multiple ROI objects to the image with several temperature features
-
+-----------------------
 This section goes through the creation of the image with multiple randomly distributed  patterns and fitting a vector of  `CentredObj` ROIs.
 
 First, create several  ROIs, this can be done by calling special function
@@ -559,25 +563,30 @@ md"Generated patterns"
 # ╔═╡ 6c78d805-4b14-4b7f-ad96-439d2a56605e
 rgb_markers
 
-# ╔═╡ fcb71c81-8ee5-4cf7-b293-ab97261d7213
-md"Fitted patterns"
-
 # ╔═╡ 6adfae4d-5137-4692-b9f3-3793c4c76202
 begin # fitting ROI's to image with several 
 	fit_multiple
 	if is_fit_multiple
 
 		fitted_rois = ThermovisorImages.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0,sort_by_area=is_sort_by_area,max_centred_objs=max_obj_number)
-		if length(fitted_rois)>0
+
+	else
+		println("There is no fitted ROIs")
+	end
+end
+
+# ╔═╡ fcb71c81-8ee5-4cf7-b293-ab97261d7213
+md"Fitted $(length(fitted_rois)) $(is_sort_by_area ? :largest : :random) patterns"
+
+# ╔═╡ 550a5eaf-d608-47ae-b444-10aab596ef3d
+begin
+if length(fitted_rois)>0
 			rgb_image_multi_roi = ThermovisorImages.draw(img,fitted_rois[1],show_cross = true,fill=true)
 			for i in 2:length(fitted_rois)
 			 	ThermovisorImages.draw!(rgb_image_multi_roi,fitted_rois[i],fill=true,show_cross = true)
 			end
 			 rgb_image_multi_roi
 		end
-	else
-		println("There is no fitted ROIs")
-	end
 end
 
 # ╔═╡ 0cdb27f4-9796-479b-b43f-b349eaabc049
@@ -695,8 +704,8 @@ hcat(before_sorting,after_sorting)
 # ╔═╡ 20cf3079-1115-451b-870d-2457a5cfd333
 md""" 
 ### 9. Recalculation of the temperature field of the surface and the area of interest with a new value of emissivity. 
-
-As far as infrared cameras measure radiance from a surface, which depends on emissivity and temperature. When emissivity is changed (e.g., corrected or updated), the temperature must be recalculated so that the modeled radiance matches the measured radiance. This recalculation is necessary because emissivity can vary with material, surface condition, and wavelength, and incorrect emissivity leads to errors in temperature measurement 
+----------------------------------
+An infrared camera measures the integrated radiance from a surface within its operational spectral range and converts this measurement into temperature using its calibration matrix. This measured value depends on both the surface’s emissivity and its temperature. When the emissivity is adjusted—such as through correction or updating—the temperature must be recalculated to ensure that the modeled radiance aligns with the observed radiance. This recalculation is essential because emissivity varies depending on the material, surface condition, and wavelength; using an incorrect emissivity value results in errors in temperature measurement.  
 
 The main idea is to recalculate the temperature in such a way that the measured radiance within the infrared camera’s spectral range remains the same for two different surface emissivities (initial and modified).
 
@@ -3042,7 +3051,7 @@ version = "1.8.1+0"
 # ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
 # ╟─cd12d201-3dac-48c7-bd53-7c76944f5816
 # ╟─9fe323c0-9afc-43fd-bc21-1c45b73d50e0
-# ╟─794ebd5e-e9e0-4772-98a9-43e20c7ef4da
+# ╠═794ebd5e-e9e0-4772-98a9-43e20c7ef4da
 # ╟─429cf33f-4422-44f0-beb8-5a1908a72273
 # ╟─7f5ec486-40d7-4e7d-9ad8-4740a1b0be22
 # ╟─13f01881-2645-429b-9856-6c3f19c0ad48
@@ -3069,15 +3078,16 @@ version = "1.8.1+0"
 # ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
 # ╟─c67290fc-6291-4f3e-a660-a3c4afa3a5e3
 # ╟─71eb240a-5a45-4bf3-b35c-a5820ca6da6c
-# ╠═4e1a5050-59b0-4d24-98bb-1520c06b28c5
-# ╠═42a7b186-aa04-4249-a129-bf925f181008
+# ╟─4e1a5050-59b0-4d24-98bb-1520c06b28c5
+# ╟─42a7b186-aa04-4249-a129-bf925f181008
+# ╟─54c27e44-d34e-49bb-9ca4-2a8218f463d5
 # ╟─e1ccfd33-3d54-4249-86f1-381a1ef90615
-# ╟─b096c4f2-9dce-409d-874a-a851f577bf92
+# ╠═b096c4f2-9dce-409d-874a-a851f577bf92
 # ╟─59f9a7f2-9601-431c-a897-543fa25c64c4
 # ╟─39e50296-21ff-4407-894f-2a380dc51e21
 # ╟─32848d3c-866b-4a6e-be07-ff6aae73d754
-# ╟─ea232c80-261b-4dc2-8891-2b7090f36760
-# ╠═8a558860-00d8-4f87-b900-4620881ade90
+# ╠═ea232c80-261b-4dc2-8891-2b7090f36760
+# ╟─8a558860-00d8-4f87-b900-4620881ade90
 # ╟─e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
 # ╠═b4ce12e3-29ec-41ac-89d3-06d08ef2beca
 # ╟─cc909b53-ed4d-44a1-a410-ff25533afc2d
@@ -3085,7 +3095,7 @@ version = "1.8.1+0"
 # ╟─a76e0a08-393e-472a-8df5-0650eb6a60af
 # ╟─6e728ea6-38be-437a-96b4-9fa084f8fec5
 # ╟─0badf26a-38fa-45be-9704-d4e80b12a9cb
-# ╠═f8154558-d0cb-4b27-8c0d-b5cac07a099c
+# ╟─f8154558-d0cb-4b27-8c0d-b5cac07a099c
 # ╟─39e31290-e7b5-47ce-ac46-aebc33ddfa54
 # ╟─9c13d94e-ca2f-41d6-922a-428bb7a476c8
 # ╟─96ad6e27-52dd-41aa-b115-f852049a485a
@@ -3094,7 +3104,8 @@ version = "1.8.1+0"
 # ╟─10954f10-9414-4839-872f-c2516d5d8e4e
 # ╟─9d79ba97-5aa8-4d60-8cf4-523a28b2e5ae
 # ╟─6c78d805-4b14-4b7f-ad96-439d2a56605e
-# ╟─fcb71c81-8ee5-4cf7-b293-ab97261d7213
+# ╠═fcb71c81-8ee5-4cf7-b293-ab97261d7213
+# ╟─550a5eaf-d608-47ae-b444-10aab596ef3d
 # ╟─6adfae4d-5137-4692-b9f3-3793c4c76202
 # ╟─0cdb27f4-9796-479b-b43f-b349eaabc049
 # ╟─d91b478b-57fa-4f26-a05c-649097202102
@@ -3111,11 +3122,11 @@ version = "1.8.1+0"
 # ╟─8b2fdcf1-cd0e-4234-a24a-afa597552f9e
 # ╟─054b15d8-a4e6-42d4-b097-938d05cbb198
 # ╟─7a00ce43-94e2-4f68-b651-b57bf7d6ab05
-# ╟─20cf3079-1115-451b-870d-2457a5cfd333
+# ╠═20cf3079-1115-451b-870d-2457a5cfd333
 # ╟─0e05f2b9-37d2-4626-b50c-4c8d48022904
 # ╟─dc5be80b-9a5e-42f2-b75f-b338292851ee
 # ╟─da18cd4d-73b3-491f-b9f0-d374b92ed8d2
-# ╠═8b017646-7a75-4973-a204-d74a42ffc97f
+# ╟─8b017646-7a75-4973-a204-d74a42ffc97f
 # ╟─4d377da2-e1b2-4aa3-a2c5-6d176ae8905f
 # ╟─9ba9540f-a2e2-40c4-99d5-940ec2e2839b
 # ╟─577897c4-c042-495e-a10e-9ac07ab2bf2b

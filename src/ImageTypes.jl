@@ -53,14 +53,14 @@ Fields:
     (the 	scaling of this image is the same as of the input `imag.initial` 
     see [`RescaledImage`](@ref) type )
 
-`reduced_flag` - bitmatrix version of (reduced)
+`reduced_flag` - bitmatrix or Matrix{Bool} version of (reduced image)
 
 """
     mutable struct FilteredImage{T}
         full::RescaledImage{T}
         region_indices::Vector{CartesianIndex{2}}
         reduced::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
-        reduced_flag::SubArray{Bool,2,BitMatrix,Tuple{UnitRange{Int},UnitRange{Int}},false}
+        reduced_flag#::SubArray{Bool,2,BitMatrix,Tuple{UnitRange{Int},UnitRange{Int}},false}
     end
 
     """
@@ -74,13 +74,13 @@ Can be used as index matrix in the full image:
  all elements which belong to the pattern
 
 """
-function full_image_flag(filtered_im::FilteredImage) 
-        flag = BitMatrix(undef,filtered_im.full.sz...)
+function full_image_flag(filtered_im::FilteredImage,::Type{T}=Matrix{Bool}) where T<:FlagMatrix 
+        flag = T(undef,filtered_im.full.sz...)
         fill!(flag,false)
         @. flag[filtered_im.region_indices]=true
         return flag
     end   
-    reduced_image_flag(fim::FilteredImage) =  copy(fim.reduced_flag)  
+    reduced_image_flag(fim::FilteredImage) =  copy(fim.reduced_flag)  #creates new matrix
     reduced_image(fim::FilteredImage) = copy(fim.reduced)
 
     """

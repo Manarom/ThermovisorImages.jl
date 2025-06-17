@@ -77,22 +77,22 @@ areas(m::MarkeredImage) = map(length, m.ViewsVect)
 
 pattern_diagonal(m::MarkeredImage,i::Int) = extrema(m.ViewsVect[i])
 """
-    flag(m::MarkeredImage,i::Int)
+    flag(m::MarkeredImage,i::Int,::Type{T}=Matrix{Bool}) where T<:FlagMatrix
 
-Creates bitmatrix with the same size as the whole markers matrx with trues on the 
+Creates matrix of Bool or Bitmatrix with the same size as the whole markers matrx with trues on the 
 location of i'th pattern
 """
-function flag(m::MarkeredImage,i::Int)
-    fl = BitMatrix(undef,size(m.markers))
+function flag(m::MarkeredImage,i::Int,::Type{T}=Matrix{Bool}) where T<:FlagMatrix
+    fl = T(undef,size(m.markers))
     return flag!(fl,m,i)
 end
 """
-    external_flag(m::MarkeredImage,i::Int)
+    external_flag(m::MarkeredImage,i::Int,::Type{T}=Matrix{Bool}) where T<:FlagMatrix
 
-Inversed version of [`flag`](@ref)
+Inversed version of [`flag`](@ref) (by default returns matrix of bool)
 """
-function external_flag(m::MarkeredImage,i::Int)
-    fl = BitMatrix(undef,size(m.markers))
+function external_flag(m::MarkeredImage,i::Int,::Type{T}=Matrix{Bool}) where T<:FlagMatrix
+    fl = T(undef,size(m.markers))
     return flag!(fl,m,i,negate=true)
 end
 """
@@ -101,7 +101,7 @@ end
 Fills the fl matrix (Bitmatrix or Matrix{Bool}) with the same size 
 as the entire image with all elements set to zero, except the pixels of `i`'th pattern
 """
-function flag!(fl::FlagMatrix,m::MarkeredImage,i::Int;negate::Bool=false)
+function flag!(fl::T,m::MarkeredImage,i::Int;negate::Bool=false) where T<:FlagMatrix
         fill!(fl,negate)
         f = @view fl[m.ViewsVect[i]]
         fill!(f,!negate)
@@ -116,7 +116,7 @@ function shrinked_flag(m::MarkeredImage,i::Int)
         (min_i, max_i) = pattern_diagonal(m,i) #CartesianIndices of maximum and minimum indices of the pattern
         #sz = 
         dinds = max_i - min_i + CartesianIndex(1,1)#indices difference
-        fl = falses(Tuple.(dinds))# creating the size of obj
+        fl = fill(false,Tuple.(dinds))# creating the size of obj
         for c in m.ViewsVect[i]
             i_in = c - min_i + CartesianIndex(1,1)
             fl[i_in] = true#m.markers[c]
@@ -192,12 +192,12 @@ function marker_image(rescaled::RescaledImage;
     # we want to implement the watershed algorithm to separate patterns from each other
     # first we need to negate image 
     
-    binarized = rescaled.im .< level_threshold
+    binarized = rescaled.im .< level_threshold # bitmatrix
     dist = distance_transform(feature_transform(binarized))
     @. dist = 1 - dist
     segments = watershed(dist, label_components(dist .< distance_threshold))
 
-    return MarkeredImage(labels_map(segments) .* (1 .-binarized))
+    return MarkeredImage(labels_map(segments) .* (1 .-binarized)) # integer operation
 end
 
 """

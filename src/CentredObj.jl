@@ -237,13 +237,13 @@ function convert_to_drawable(::CentredObj) end
 """
     fill_im!(img,c::CentredObj)
 
-Fills bitmatrix `img` in a way that all pixels which are 
+Fills bitmatrix or the matrix of Bool `img` in a way that all pixels which are 
 within the `CentredObj` are true and false otherwise.  
 """
-function fill_im!(img,c::CentredObj)
-    for i in keys(img)
-        inds = [k for k in Tuple.(i)]
-        img[i] = is_within(c,inds)
+function fill_im!(img::FlagMatrix,c::CentredObj)
+    for i in keys(img) # CartesianIndex
+        #inds = [k for k in Tuple.(i)]
+        img[i] = is_within(c,i)
     end
     return img
 end
@@ -480,7 +480,7 @@ is_within(c::RectangleObj,inds::AbstractVector) = begin
     (a,b) = sides(c)
     a/=2
     b/=2
-    c.center[1]-a<=inds[1]<=c.center[1]+a   && c.center[2]-b<=inds[2]<=c.center[2]+b
+    abs(c.center[1]-inds[1])<=a   && abs(c.center[2]- inds[2])<= b
 end
 diagonal_points(c::RectangleObj) = begin
     (a,b) = sides(c)
@@ -761,36 +761,4 @@ function radial_distribution(imag::AbstractMatrix,c::CentredObj,
             end
     end
     return (first_columnn_along_line,radial_distrib_matrix)
-end
-
-"""
-    image_fill_discr(image::AbstractMatrix,c::CentredObj)
-
-Function returns the function to evaluate the discrepancy  between 
-`CentredObj` and the matrix, this function is used during the fitting procedure 
-"""    
-function image_fill_discr(image::AbstractMatrix,c::CentredObj)
-     discr_obj =ImCentDiscr(image,c)   
-     return discr_obj
-                #image_discr(image, fill_im!(im_copy,fill_from_vect!(c,x)))
-
-end
-struct ImCentDiscr{T<:CentredObj}
-    image_target::AbstractMatrix
-    image_fillable::AbstractMatrix
-    c::T
-    ImCentDiscr(imag,c::T) where T<:CentredObj=  begin
-        new{T}(imag,copy(imag),c)
-    end
-end
-(icd::ImCentDiscr)(x::AbstractVector) = begin
-    fill_from_vect!(icd.c,x)
-    s = area(icd.c)
-    fill_im!(icd.image_fillable,icd.c)
-    s_im = sum(icd.image_fillable)
-    return s/s_im  + image_discr(icd.image_target,icd.image_fillable)
-end
-(icd::ImCentDiscr{CircleObj})(x::AbstractVector) = begin
-    fill_im!(icd.image_fillable,fill_from_vect!(icd.c,x))
-    return image_discr(icd.image_target,icd.image_fillable)
 end

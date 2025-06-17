@@ -1,6 +1,8 @@
 module ThermovisorImages
     using Images,ImageShow,ImageIO
-    using CSV,Plots
+    using CSV
+    #using Plots
+    using RecipesBase
     using Colors, ColorVectorSpace
     using Dates,Statistics,LinearAlgebra
     #using ImageSegmentation,IndirectArrays
@@ -47,7 +49,7 @@ of the whole image or it's region using [`recalculate_with_new_emissivity!`](@re
     const int_floor_fld = Int ∘ floor ∘ fld
     const DefColorScheme = Ref(ColorSchemes.inferno)# default colorscheme 
     const DefRoiColor = Ref(RGB{Float64}(0,1,0))# default roi frame color
-    const DEFAULT_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1,iterations=50))
+    const DEFAULT_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1e-1,iterations=100))
     const DEFAULT_TEMPERATURE_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1e-4,iterations=50))
 
     export read_temperature_file,find_temperature_files,recalculate_with_new_emissivity! 
