@@ -13,9 +13,9 @@ ang_range = 0.0:1:180 # range of angles
 
 DS = ThermovisorImages.radial_distribution_statistics(R,D)
 
-p_radial = ThermovisorImages.plot_radial_distribution_statistics(DS,show_lower_bound=true,show_upper_bound=true,probability=0.99)
+p_radial = ThermovisorImages.plot_radial_distribution_statistics(DS,show_std=false, show_lower_bound=true,show_upper_bound=true,probability=0.99)
 
 
-p_radial = ThermovisorImages.recipe_plot_radial_distribution_statistics(DS,show_lower_bound=true,show_upper_bound=true,probability=0.99)
+p_radial = ThermovisorImages.recipe_plot_radial_distribution_statistics(DS,show_std=false,show_lower_bound=true,show_upper_bound=true,probability=0.99)
 using Plots
 plot(p_radial)

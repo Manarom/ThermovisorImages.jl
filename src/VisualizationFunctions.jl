@@ -173,20 +173,25 @@ function change_default_roi_color(color::RGB{Float64})
 end
 
 
-"""
+ """
     plot_radial_distribution_statistics(ds::DistributionStatistics;
                 show_lower_bound::Bool=false,
                 show_upper_bound::Bool=false,
+                show_std::Bool=true,
                 is_use_student::Bool=true,
                 probability::Float64=0.95,
                 length_scaler::Float64=1.0,
-                is_centered::Bool=true,label=nothing,
+                is_centered::Bool=true,
+                bound_color::Symbol=:red,
+                # plot kwargs
+                label=nothing,
                 minorgrid=true,
                 gridlinewidth=2,
                 title="Average temperature radial distribution",
-                framestyle = :box,
-                dpi=600,xlabel = Distance  across the sample ,mm", 
-                ylabel=L"Temperature °C",
+                framestyle::Symbol = :box,
+                dpi::Int=600,
+                xlabel = "Distance  across the sample ,mm", 
+                ylabel =  "Temperature °C",
                 kwargs...)
 
 Plots radial ditribution averaged value, lower and upper confidence bounds as <d> ± std
@@ -196,54 +201,11 @@ provied all coordinates are multiplied by this value (can be used to convert pix
 If `is_centered` is true coordinate goes from -L/2 to +L/2 where L is the maximum of coordinates.
 Other key-word arguments are the same as for the plot functions, additional keyword arguments are
 transfered directly to the plot function
-
 """
 function plot_radial_distribution_statistics(ds::DistributionStatistics;
                 show_lower_bound::Bool=false,
                 show_upper_bound::Bool=false,
-                is_use_student::Bool=true,
-                probability::Float64=0.95,
-                length_scaler::Float64=1.0,
-                is_centered::Bool=true,
-                label=nothing,
-                minorgrid=true,
-                gridlinewidth=2,
-                title="Average temperature radial distribution",
-                framestyle = :box,
-                dpi=600,
-                xlabel = L"Distance  \ across \ the \ sample ,mm", 
-                ylabel=L"Temperature \ \degree C",
-                kwargs...)
-        points_number = length(ds.coordinate)
-        if is_centered || length_scaler != 1.0
-            L2plot = copy(ds.coordinate)
-            if is_centered
-                l_center = L2plot[int_floor(points_number/2)] 
-                @. L2plot -= l_center
-            end
-            L2plot .*=length_scaler
-        else
-            L2plot=ds.coordinate
-        end    
-	    #=p=plot(L2plot,
-		    ds.mean_D,label=label,
-		    minorgrid=minorgrid,
-		    gridlinewidth=gridlinewidth,
-		    title=title,
-		    ribbon = (ds.std_D,ds.std_D), framestyle = framestyle,dpi=dpi,kwargs...)
-	    xlabel!(p,xlabel)
-	    ylabel!(p,ylabel)
-        if show_lower_bound || show_upper_bound
-            (lower_bound,upper_bound) = eval_bounds(ds,is_use_student=is_use_student,probability=probability)
-            show_lower_bound ? plot!(p,L2plot,lower_bound,linecolor=:red,label=nothing) : nothing
-            show_upper_bound ? plot!(p,L2plot,upper_bound,linecolor=:red,label=nothing) : nothing
-        end
-        return p =#
-    end
-
- function recipe_plot_radial_distribution_statistics(ds::DistributionStatistics;
-                show_lower_bound::Bool=false,
-                show_upper_bound::Bool=false,
+                show_std::Bool=true,
                 is_use_student::Bool=true,
                 probability::Float64=0.95,
                 length_scaler::Float64=1.0,
@@ -270,30 +232,21 @@ function plot_radial_distribution_statistics(ds::DistributionStatistics;
         else
             L2plot=ds.coordinate
         end 
-        #=   
-	    p=plot(L2plot,
-		    ds.mean_D,label=label,
-		    minorgrid=minorgrid,
-		    gridlinewidth=gridlinewidth,
-		    title=title,
-		    ribbon = (ds.std_D,ds.std_D), framestyle = framestyle,dpi=dpi,kwargs...)
-	    xlabel!(p,xlabel)
-	    ylabel!(p,ylabel)=#
+
         if show_lower_bound || show_upper_bound
             (lower_bound,upper_bound) = eval_bounds(ds,is_use_student=is_use_student,probability=probability)
-            #show_lower_bound ? plot!(p,L2plot,lower_bound,linecolor=:red,label=nothing) : nothing
-            #show_upper_bound ? plot!(p,L2plot,upper_bound,linecolor=:red,label=nothing) : nothing
         end
-        plot_args = merge(NamedTuple{(:label, :minorgrid,:gridlinewidth,:title,:framestyle,:dpi,:xlabel,:ylabel)}(
-                                (label,minorgrid,gridlinewidth,title,framestyle,dpi,xlabel,ylabel)
-        ),kwargs)
-        return StatDataPlot(ds.mean_D,ds.mean_D,lower_bound,upper_bound,show_lower_bound,show_upper_bound,bound_color,plot_args)
+        plot_args = merge(NamedTuple{(:label, :minorgrid,:gridlinewidth,:title,:framestyle,:dpi,:xlabel,:ylabel,:ribbon)}(
+                                (label,minorgrid,gridlinewidth,title,framestyle,dpi,xlabel,ylabel,(ds.std_D,ds.std_D))
+                    ),kwargs)
+        return StatDataPlot(L2plot,ds.mean_D,lower_bound,upper_bound,show_std,show_lower_bound,show_upper_bound,bound_color,plot_args)
     end   
     struct StatDataPlot
         x
         y
         lower_bound
         upper_bound
+        show_std
         show_lower_bound
         show_upper_bound
         bound_color
@@ -309,14 +262,33 @@ function plot_radial_distribution_statistics(ds::DistributionStatistics;
         dpi-->stat_data.plot_args.dpi
         xlabel-->stat_data.plot_args.xlabel
         ylabel-->stat_data.plot_args.ylabel  
-        #label-->xydata(:measurement_T)
-        #plot_title-->xydata(:configuration_name)
+        stat_data.show_std ?  ribbon := stat_data.plot_args.ribbon : nothing 
+        if stat_data.show_upper_bound
+            @series begin
+                seriestype := :path
+                primary := false
+                linecolor := stat_data.bound_color
+                ribbon :=nothing
+                stat_data.x, stat_data.upper_bound
+            end
+        end
+        if stat_data.show_lower_bound
+             @series begin
+                seriestype := :path
+                primary := false
+                linecolor := stat_data.bound_color
+                ribbon :=nothing
+                stat_data.x, stat_data.lower_bound
+            end
+        end
+
         return (stat_data.x,stat_data.y)
     end 
     """
     plot_angular_distribution_statistics(ds::DistributionStatistics;
                 show_lower_bound::Bool=true,
                 show_upper_bound::Bool=true,
+                show_std::Bool=true,
                 probability::Float64=0.95,
                 is_use_student::Bool=true,
                 length_scaler::Float64=1.0,
@@ -371,7 +343,8 @@ the centre of the `CentredObj`
 """
 function plot_along_line_distribution(along_line_length,along_line_distribution;
                                         length_scaler::Float64=1.0,
-                                        is_centered::Bool=true,kwargs...)
+                                        is_centered::Bool=true,
+                                        kwargs...)
         #centr = center(c)
 	    #=if !is_centered
             p_line=plot(length_scaler*along_line_length,along_line_distribution,gridlinewidth=2,framestyle = :box,kwargs...)
