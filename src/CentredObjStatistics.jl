@@ -149,7 +149,7 @@ column corresponds to sample, thus rows number of `D` should be the same as the 
 of `coordinate`, columns number is the number of samples.
 
 """
-DistributionStatistics(coordinate::AbstractVector,D::AbstractMatrix) = begin
+DistributionStatistics(coordinate::AbstractVector,D::AbstractVecOrMat) = begin
         len = length(coordinate)
         len != size(D,1) ? throw(DomainError("Inappropriate size of D and coordinates")) : nothing
         mean_D = similar(coordinate)

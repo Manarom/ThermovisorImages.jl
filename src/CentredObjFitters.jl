@@ -28,8 +28,8 @@ refit - if true the starting point of the optimization recalculated otherwise it
 """
 function fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix;
                                 starting_point::Union{Nothing,Vector{Float64}}=nothing,
-                                optimizer::Optim.ZerothOrderOptimizer = Optim.NelderMead(), 
-                                options::Optim.Options=DEFAULT_FITTING_OPTIONS[],
+                                optimizer=DEFAULT_OPTIMIZER(), 
+                                options=DEFAULT_FITTING_OPTIONS[],
                                 refit::Bool = true) 
 
         optim_fun = image_fill_discr(im_bin,c) 
@@ -77,8 +77,8 @@ function fit_all_patterns!(markers::MarkeredImage,::Type{T}=CircleObj;
                                             max_centred_objs::Int=200,
                                             sort_by_area::Bool = false,
                                             is_descend::Bool = true,
-                                            optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
-                                            options::Optim.Options=DEFAULT_FITTING_OPTIONS[],
+                                            optimizer=DEFAULT_OPTIMIZER(), 
+                                            options=DEFAULT_FITTING_OPTIONS[],
                                             refit::Bool=false) where T<:CentredObj
                                             
            # markers_number = count_separate_patterns(markers)       
@@ -107,8 +107,8 @@ See [`fit_all_patterns!`](@ref)
 """
 function fit_all_patterns!(c_vect::Vector{T},
                             markers::MarkeredImage,
-                            optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
-                            options::Optim.Options=DEFAULT_FITTING_OPTIONS[],
+                            optimizer=DEFAULT_OPTIMIZER(), 
+                            options =DEFAULT_FITTING_OPTIONS[],
                             refit::Bool = false) where T<:CentredObj
 
             num_patterns = length(markers)
@@ -143,8 +143,8 @@ function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
                                     max_centred_objs::Int=200,
                                     sort_by_area::Bool = false,
                                     is_descend::Bool = true,
-                                    optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
-                                    options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
+                                    optimizer=DEFAULT_OPTIMIZER(), 
+                                    options =DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
 
         markers = marker_image(img,level_threshold=level_threshold,
                                 distance_threshold=distance_threshold)

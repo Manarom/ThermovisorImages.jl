@@ -186,7 +186,7 @@ function marker_image(rescaled::RescaledImage;
             distance_threshold::Float64=-15.0)
 
     if level_threshold>1 || level_threshold <=0 # if threshold is not settled explicitly the otsu thresholding algorithm is used
-        level_threshold = otsu_threshold(rescaled.im)
+        level_threshold = otsu_threshold(rescaled.im) #otsu_threshold(rescaled.im)
     end
     # thermal image is an image with several region of higher temperature
     # we want to implement the watershed algorithm to separate patterns from each other

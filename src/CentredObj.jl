@@ -685,12 +685,13 @@ oriented with the angle `direction_angle` in degrees  with respect to the posist
 this line lies within the roi (`CentreObj`) and goes through its center.
 
 Function returns:
+a Tuple (points,distrib,linepoints)
 
 points  - vector of `CartesianIndex` of image's points lying on the line
 
 distrib - distribution of values
 
-line_points - endpoints of line the Tupple of (left_x,left_Y,right_x,right_y)
+linepoints - endpoints of line the Tupple of (left_x,left_Y,right_x,right_y)
 
 """
 function within_mask_line_points_distribution(imag::AbstractMatrix,c::CentredObj,

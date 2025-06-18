@@ -17,7 +17,7 @@ macro bind(def, element)
 end
 
 # ╔═╡ 051044c5-760c-4b60-90fc-82a347c3b6bc
-using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO,Optim,CSV,Colors,ColorVectorSpace,Distributions,ColorSchemes,StaticArrays,Interpolations,FileTypes,ImageDraw,StatsBase,PlanckFunctions
+using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO,Optim,CSV,Colors,ColorVectorSpace,Distributions,ColorSchemes,StaticArrays,Interpolations,FileTypes,ImageDraw,StatsBase,PlanckFunctions,RecipesBase
 
 # ╔═╡ 4460f260-f65f-446d-802c-f2197f4d6b27
 md"""
@@ -143,7 +143,8 @@ Here, first argument is the type of object (**`CircleObj`**, **`SquareObj`** or 
 	square=obj_from_vect(SquareObj,[100,120,50])
 ```
 To convert internal image format to the drawable RGB matrices there is a **`draw`** function, it is also possible to draw the image together with the **`CentredObj`** on it.
-To convert images to RGB schemes from **`ColorShemes.jl`** package are used. 
+To convert images to RGB schemes from **[`ColorShemes.jl`](https://github.com/JuliaGraphics/ColorSchemes.jl.git)** package are used.
+To draw the centred object the **[`ImageDraw.jl`](https://github.com/JuliaImages/ImageDraw.jl.git)** package is used.
 ```julia
 	img # RescaledIMage or Matrix{Float64}
 	rgb_img = ThermovisorImages.draw(img,color_scheme=:inferno)# converts to RGB
@@ -308,7 +309,7 @@ md"""
 Temperature distribution along the line, which goes through the ROI's centre within the ROI, can be obtained by calling 
 
 ```julia
-	along_mask_line_distribution(imag::AbstractMatrix,c::CentredObj,direction_angle=0.0,line_length=10.0;length_per_pixel=1.0,use_wu::Bool=false)
+	(along_line_length,distrib,line_points) = along_mask_line_distribution(imag::AbstractMatrix,c::CentredObj,direction_angle=0.0,line_length=10.0;length_per_pixel=1.0,use_wu::Bool=false)
 ```
 It return three vectors:  along line coordinate, along line values and along line points coordinates in **`image`**, **`direction_angle`** is the rotation angle of line which goes through the center of roi and  **`line_length`** is the length of this line, additionaly, keyword argument  **`length_per_pixel`** can be provided to convert the coordinates from pixels to appropriate units.
 
@@ -316,8 +317,14 @@ It return three vectors:  along line coordinate, along line values and along lin
 
 # ╔═╡ 6d37916c-7895-49d3-b8a3-c8661050ebcb
 md"""
-There are two algorithms available to obtain the line points within the image viz **`bresenham`** (default) and **`xiaolin_wu`**. Both were taken from the **`ImageDraw`** package. **`xiaolin_wu`** algorithm produces two coordinates for every point along the line, and the resulting temperature for each position is calculated as the average of temperatures for these two points. 
+There are two algorithms available to obtain the line points within the image viz **`bresenham`** (default) and **`xiaolin_wu`**. Both were taken from the **[`ImageDraw.jl`](https://github.com/JuliaImages/ImageDraw.jl.git)** package. **`xiaolin_wu`** algorithm produces two coordinates for every point along the line, and the resulting temperature for each position is calculated as the average of temperatures for these two points. 
 
+
+"""
+
+
+# ╔═╡ a923a10d-064c-4403-a81c-476aef925607
+md"""
 Try Xiaolin-Wu algorithm? $(@bind is_use_wu CheckBox(default=false))
 
 """
@@ -397,8 +404,7 @@ begin
 	(along_line_length,distrib,line_points) = ThermovisorImages.along_mask_line_distribution(image_to_show,fitted_obj,direction_angle,line_length,use_wu=is_use_wu,length_per_pixel=mm_per_pixel[])
 	#@show length(points)
 	
-	pl_distrib=ThermovisorImages.plot_along_line_distribution(along_line_length,distrib,is_centered = true)
-	#pl_distrib
+	pl_distrib=plot(ThermovisorImages.along_line_distribution_plot(along_line_length,distrib,is_centered = true))
 end
 
 # ╔═╡ 59f9a7f2-9601-431c-a897-543fa25c64c4
@@ -412,12 +418,12 @@ begin
 
 		DS = ThermovisorImages.radial_distribution_statistics(R,D)
 
-		p_radial = ThermovisorImages.plot_radial_distribution_statistics(DS,show_lower_bound=true,show_upper_bound=true,probability=0.99)
+		p_radial = plot(ThermovisorImages.radial_distribution_statistics_plot(DS,show_lower_bound=true,show_upper_bound=true,probability=0.99))
 
 			angs = collect(ang_range)
 	angular_DS = ThermovisorImages.angular_distribution_statistics(angs,R,D)
 	
-	p_angular = ThermovisorImages.plot_angular_distribution_statistics(angular_DS)
+	p_angular = plot(ThermovisorImages.angular_distribution_statistics_plot(angular_DS))
 end;
 
 # ╔═╡ 32848d3c-866b-4a6e-be07-ff6aae73d754
@@ -436,7 +442,27 @@ After calculating the radial distribution; statistics on radial and angular  dis
         distrib)
 	DS_angular = angular_distribution_statistics(angles,along_length_coordinate,distrib)
 ```
-These functions evaluate averaged over the angle and line length
+These functions evaluate averaged over the angle and line length, it returns an object of **`DistributionStatistics`** type, which strores averaged values, standard deviation, and sampling volume.
+
+Confidence boundaries according to t-distribution can be evaluated by calling **`eval_bounds`** function on `
+```julia
+(lower_bound,upper_bound) = eval_bounds(DS::DistributionStatistics;is_use_student::Bool=true,probability::Float64=0.95)
+```
+This function returns the upper and the lower values, ehich define confidence boundaries for specified probability as: 
+
+``T = <T> \pm t \cdot S(T) ``
+
+where S(T) is the standard deviation.
+
+There are several predefined templates(recipes, thanks to  [`RecipesBase`](https://docs.juliaplots.org/stable/recipes) ) to plot the along line, angle- and length-averaged temperature distribution. Functions  **`along_line_distribution_plot`**, **`radial_distribution_statistics_plot`** and **`angular_distribution_statistics_plot`** return the structure which is linked to the `plot` function through the recipe macro, thus, calling `plot` will automatically setup plot properties to specific predefined values.  
+
+```julia
+using Plots
+plot(along_line_distribution_plot(along_line_length,along_line_distribution))
+plot(radial_distribution_statistics_plot(ds::DistributionStatistics))
+plot(angular_distribution_statistics_plot(ds::DistributionStatistics))
+```
+These functions has several optional arguments (for details see docs), the first one plots 
 """
 
 # ╔═╡ ea232c80-261b-4dc2-8891-2b7090f36760
@@ -563,17 +589,20 @@ md"Generated patterns"
 # ╔═╡ 6c78d805-4b14-4b7f-ad96-439d2a56605e
 rgb_markers
 
+# ╔═╡ 68f1ba03-a84a-40fb-9ce4-bf0ac9ae55d0
+md" Distance threshold $(@bind multifit_distance_threshold Slider(-15.0:1e-1:0.0,default=-1.0,show_value=true))"
+
 # ╔═╡ 6adfae4d-5137-4692-b9f3-3793c4c76202
 begin # fitting ROI's to image with several 
 	fit_multiple
 	if is_fit_multiple
 
-		fitted_rois = ThermovisorImages.fit_all_patterns(rs,multifit_roi_type,distance_threshold = 0.0,sort_by_area=is_sort_by_area,max_centred_objs=max_obj_number)
+		fitted_rois = ThermovisorImages.fit_all_patterns(rs,multifit_roi_type,sort_by_area=is_sort_by_area,max_centred_objs=max_obj_number,distance_threshold=multifit_distance_threshold)
 
 	else
 		println("There is no fitted ROIs")
 	end
-end
+end;
 
 # ╔═╡ fcb71c81-8ee5-4cf7-b293-ab97261d7213
 md"Fitted $(length(fitted_rois)) $(is_sort_by_area ? :largest : :random) patterns"
@@ -814,6 +843,7 @@ Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 PlanckFunctions = "56edaee7-e77f-43d7-994d-8307b8de0a62"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
@@ -838,6 +868,7 @@ Optim = "~1.12.0"
 PlanckFunctions = "~1.0.0"
 Plots = "~1.40.13"
 PlutoUI = "~0.7.62"
+RecipesBase = "~1.3.4"
 Revise = "~3.8.0"
 StaticArrays = "~1.9.13"
 StatsBase = "~0.34.5"
@@ -849,7 +880,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "7d840be103620e040059a9cf283c588c04a0541c"
+project_hash = "4a8695ba5c954d133ac38a7671a690f9a2fcd7fe"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "e2478490447631aedba0823d4d7a80b2cc8cdb32"
@@ -3042,10 +3073,10 @@ version = "1.8.1+0"
 # ╟─79b31b84-afe0-4aac-90bf-97e8cbfff5e2
 # ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
 # ╟─fc6af4b0-1127-11f0-1b66-a59d87c5b141
-# ╟─051044c5-760c-4b60-90fc-82a347c3b6bc
-# ╟─4f93b7ba-3488-446d-8043-718fbdc5b808
+# ╠═051044c5-760c-4b60-90fc-82a347c3b6bc
+# ╠═4f93b7ba-3488-446d-8043-718fbdc5b808
 # ╟─215ed2f4-71ba-4cb5-b198-677d0d7ffb38
-# ╟─f6c1be87-94d2-4b08-a52d-6eb637192ee8
+# ╠═f6c1be87-94d2-4b08-a52d-6eb637192ee8
 # ╟─870113c3-b439-4d34-90d8-fdd8a158f9dd
 # ╟─dd4a9e93-0d4e-497a-8ca4-0e8f36205ffb
 # ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
@@ -3075,6 +3106,7 @@ version = "1.8.1+0"
 # ╟─768535e0-a514-4dff-ac8b-0d7ca126149c
 # ╟─5d6222cf-99f3-4ce9-a4a2-91c17dc9c0d2
 # ╟─6d37916c-7895-49d3-b8a3-c8661050ebcb
+# ╟─a923a10d-064c-4403-a81c-476aef925607
 # ╟─6482d05d-06e2-43cc-ab53-ff4bbcd63e3e
 # ╟─c67290fc-6291-4f3e-a660-a3c4afa3a5e3
 # ╟─71eb240a-5a45-4bf3-b35c-a5820ca6da6c
@@ -3082,14 +3114,14 @@ version = "1.8.1+0"
 # ╟─42a7b186-aa04-4249-a129-bf925f181008
 # ╟─54c27e44-d34e-49bb-9ca4-2a8218f463d5
 # ╟─e1ccfd33-3d54-4249-86f1-381a1ef90615
-# ╠═b096c4f2-9dce-409d-874a-a851f577bf92
+# ╟─b096c4f2-9dce-409d-874a-a851f577bf92
 # ╟─59f9a7f2-9601-431c-a897-543fa25c64c4
 # ╟─39e50296-21ff-4407-894f-2a380dc51e21
 # ╟─32848d3c-866b-4a6e-be07-ff6aae73d754
-# ╠═ea232c80-261b-4dc2-8891-2b7090f36760
+# ╟─ea232c80-261b-4dc2-8891-2b7090f36760
 # ╟─8a558860-00d8-4f87-b900-4620881ade90
 # ╟─e9216d7a-c2f3-44c0-a7d9-2c62ac35ecd9
-# ╠═b4ce12e3-29ec-41ac-89d3-06d08ef2beca
+# ╟─b4ce12e3-29ec-41ac-89d3-06d08ef2beca
 # ╟─cc909b53-ed4d-44a1-a410-ff25533afc2d
 # ╟─d5b6f453-5e92-41e6-a45f-cb75660bc198
 # ╟─a76e0a08-393e-472a-8df5-0650eb6a60af
@@ -3104,7 +3136,8 @@ version = "1.8.1+0"
 # ╟─10954f10-9414-4839-872f-c2516d5d8e4e
 # ╟─9d79ba97-5aa8-4d60-8cf4-523a28b2e5ae
 # ╟─6c78d805-4b14-4b7f-ad96-439d2a56605e
-# ╠═fcb71c81-8ee5-4cf7-b293-ab97261d7213
+# ╟─fcb71c81-8ee5-4cf7-b293-ab97261d7213
+# ╟─68f1ba03-a84a-40fb-9ce4-bf0ac9ae55d0
 # ╟─550a5eaf-d608-47ae-b444-10aab596ef3d
 # ╟─6adfae4d-5137-4692-b9f3-3793c4c76202
 # ╟─0cdb27f4-9796-479b-b43f-b349eaabc049
@@ -3122,7 +3155,7 @@ version = "1.8.1+0"
 # ╟─8b2fdcf1-cd0e-4234-a24a-afa597552f9e
 # ╟─054b15d8-a4e6-42d4-b097-938d05cbb198
 # ╟─7a00ce43-94e2-4f68-b651-b57bf7d6ab05
-# ╠═20cf3079-1115-451b-870d-2457a5cfd333
+# ╟─20cf3079-1115-451b-870d-2457a5cfd333
 # ╟─0e05f2b9-37d2-4626-b50c-4c8d48022904
 # ╟─dc5be80b-9a5e-42f2-b75f-b338292851ee
 # ╟─da18cd4d-73b3-491f-b9f0-d374b92ed8d2

@@ -1,19 +1,15 @@
 module ThermovisorImages
-    using Images,ImageShow,ImageIO
+    #using ImageShow,ImageIO
+    using Images
     using CSV
-    #using Plots
     using RecipesBase
     using Colors, ColorVectorSpace
-    using Dates,Statistics,LinearAlgebra
-    #using ImageSegmentation,IndirectArrays
+    using Statistics,LinearAlgebra,FileTypes,FileIO
     using Optim
-    using LaTeXStrings
     using Distributions # to evaluate the Students coefficient
     using ColorSchemes # to draw heatmaps
     using StaticArrays
     using Interpolations
-    using  FileTypes # to check the type of load
-    using FileIO
     using StatsBase
     import PlanckFunctions as Planck
     import ImageDraw
@@ -51,6 +47,8 @@ of the whole image or it's region using [`recalculate_with_new_emissivity!`](@re
     const DefRoiColor = Ref(RGB{Float64}(0,1,0))# default roi frame color
     const DEFAULT_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1e-1,iterations=100))
     const DEFAULT_TEMPERATURE_FITTING_OPTIONS = Ref(Optim.Options(x_abstol=1e-4,iterations=50))
+    const DEFAULT_OPTIMIZER = NelderMead
+    const DEFAULT_BINARIZATION_ALGORITHM = otsu_threshold
 
     export read_temperature_file,find_temperature_files,recalculate_with_new_emissivity! 
     include("CentredObj.jl") #= export CentredObj,CircleObj,SquareObj,RectangleObj,
