@@ -1,6 +1,6 @@
 using ThermovisorImages
 using Test
-test_data_folder = joinpath(".","test","tests data")
+test_data_folder = joinpath(@__DIR__(),"tests data")
 @testset "ThermovisorImages.jl" begin
     # csv file reading 
     rescaled_csv = read_temperature_file(joinpath(test_data_folder,"T500.csv"))
