@@ -1,7 +1,7 @@
 
 export CentredObjCollectionStat, std_within_mask,
 radial_distribution_statistics,DistributionStatistics,
-angular_distribution_statistics,plot_radial_distribution_statistics,
+angular_distribution_statistics,
 generate_random_objs
 
 max_side(v) = findmax(side,v)
@@ -149,7 +149,7 @@ column corresponds to sample, thus rows number of `D` should be the same as the 
 of `coordinate`, columns number is the number of samples.
 
 """
-DistributionStatistics(coordinate::AbstractVector,D::AbstractMatrix) = begin
+DistributionStatistics(coordinate::AbstractVector,D::AbstractVecOrMat) = begin
         len = length(coordinate)
         len != size(D,1) ? throw(DomainError("Inappropriate size of D and coordinates")) : nothing
         mean_D = similar(coordinate)
@@ -239,146 +239,6 @@ function student_coefficient(degrees_of_freedom::Int, probability; digits::Int =
     end
 	return round(Distributions.quantile(Distributions.TDist(degrees_of_freedom), probability),digits=digits)
 end
-
-
-"""
-    plot_radial_distribution_statistics(ds::DistributionStatistics;
-                show_lower_bound::Bool=false,
-                show_upper_bound::Bool=false,
-                is_use_student::Bool=true,
-                probability::Float64=0.95,
-                length_scaler::Float64=1.0,
-                is_centered::Bool=true,label=nothing,
-                minorgrid=true,
-                gridlinewidth=2,
-                title="Average temperature radial distribution",
-                framestyle = :box,
-                dpi=600,xlabel = Distance  across the sample ,mm", 
-                ylabel=L"Temperature °C",
-                kwargs...)
-
-Plots radial ditribution averaged value, lower and upper confidence bounds as <d> ± std
-and confidence bounds multiplied by the Student's coefficient (if show_lower_bound and 
-show_upper_bound are true) calculated for the `pobability` value, if `length_scaler` is
-provied all coordinates are multiplied by this value (can be used to convert pixels to actual units)
-If `is_centered` is true coordinate goes from -L/2 to +L/2 where L is the maximum of coordinates.
-Other key-word arguments are the same as for the plot functions, additional keyword arguments are
-transfered directly to the plot function
-
-"""
-function plot_radial_distribution_statistics(ds::DistributionStatistics;
-                show_lower_bound::Bool=false,
-                show_upper_bound::Bool=false,
-                is_use_student::Bool=true,
-                probability::Float64=0.95,
-                length_scaler::Float64=1.0,
-                is_centered::Bool=true,
-                label=nothing,
-                minorgrid=true,
-                gridlinewidth=2,
-                title="Average temperature radial distribution",
-                framestyle = :box,
-                dpi=600,xlabel = L"Distance  \ across \ the \ sample ,mm", 
-                ylabel=L"Temperature \ \degree C",
-                kwargs...)
-        points_number = length(ds.coordinate)
-        if is_centered || length_scaler != 1.0
-            L2plot = copy(ds.coordinate)
-            if is_centered
-                l_center = L2plot[int_floor(points_number/2)] 
-                @. L2plot -= l_center
-            end
-            L2plot .*=length_scaler
-        else
-            L2plot=ds.coordinate
-        end    
-	    p=plot(L2plot,
-		    ds.mean_D,label=label,
-		    minorgrid=minorgrid,
-		    gridlinewidth=gridlinewidth,
-		    title=title,
-		    ribbon = (ds.std_D,ds.std_D), framestyle = framestyle,dpi=dpi,kwargs...)
-	    xlabel!(p,xlabel)
-	    ylabel!(p,ylabel)
-        if show_lower_bound || show_upper_bound
-            (lower_bound,upper_bound) = eval_bounds(ds,is_use_student=is_use_student,probability=probability)
-            show_lower_bound ? plot!(p,L2plot,lower_bound,linecolor=:red,label=nothing) : nothing
-            show_upper_bound ? plot!(p,L2plot,upper_bound,linecolor=:red,label=nothing) : nothing
-        end
-        return p
-    end
-    """
-    plot_angular_distribution_statistics(ds::DistributionStatistics;
-                show_lower_bound::Bool=true,
-                show_upper_bound::Bool=true,
-                probability::Float64=0.95,
-                is_use_student::Bool=true,
-                length_scaler::Float64=1.0,
-                label=nothing,
-                minorgrid=true,
-                gridlinewidth=2,
-                title="Average temperature angular distribution",framestyle = :box,
-                dpi=600,xlabel = "Angle , °", ylabel="Temperature, °C",
-                kwargs...)
-
-
-
- The same as [`plot_radial_distribution_statistics`](@ref) but plots averaged angular distribution
-"""
-function plot_angular_distribution_statistics(ds::DistributionStatistics;
-                show_lower_bound::Bool=true,
-                show_upper_bound::Bool=true,
-                probability::Float64=0.95,
-                is_use_student::Bool=true,
-                length_scaler::Float64=1.0,
-                label=nothing,
-                minorgrid=true,
-                gridlinewidth=2,
-                title="Average temperature angular distribution",framestyle = :box,
-                dpi=600,xlabel = "Angle , °", ylabel="Temperature, °C",
-                kwargs...)
-
-                return plot_radial_distribution_statistics(ds,
-                        show_lower_bound=show_lower_bound,show_upper_bound=show_upper_bound,
-                        probability=probability,is_use_student=is_use_student,
-                        length_scaler=length_scaler,
-                        is_centered=false,
-                        label=label,
-                        minorgrid=minorgrid,
-                        gridlinewidth=gridlinewidth,
-                        title=title,framestyle = framestyle,
-                        dpi=dpi,xlabel = xlabel, ylabel=ylabel,
-                        kwargs...) 
-
-    end
-"""
-    plot_along_line_distribution(along_line_length,along_line_distribution;
-                                        length_scaler::Float64=1.0,
-                                        is_centered::Bool=true,kwargs...)
-
-Plots temperature distribution along the line `along_line_length` - coordinates,
-`along_line_distribution` - values of temperature, `length_scaler` - length scaler 
-(can be used to convert pixels to the actual length)
-`is_centered` - the line length is converted to the coordinates with zero value in 
-the centre of the `CentredObj`
-
-"""
-function plot_along_line_distribution(along_line_length,along_line_distribution;
-                                        length_scaler::Float64=1.0,
-                                        is_centered::Bool=true,kwargs...)
-        #centr = center(c)
-	    if !is_centered
-            p_line=plot(length_scaler*along_line_length,along_line_distribution,gridlinewidth=2,framestyle = :box,kwargs...)
-        else
-            p_line=plot(length_scaler*(along_line_length .- along_line_length[end]/2),along_line_distribution,
-            gridlinewidth=2,
-            framestyle = :box,kwargs...)
-        end
-	    xlabel!(p_line,L"Distance \ along \ the \ line \ ,\ mm")
-	    ylabel!(p_line,L"Temperature \ \degree C")
-	    title!(p_line,"Temperature distribution along the line")
-        return p_line
-    end
 
 
     """

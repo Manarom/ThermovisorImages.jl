@@ -4,7 +4,7 @@
     fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix;
                                 starting_point::Union{Nothing,Vector{Float64}}=nothing,
                                 optimizer::Optim.ZerothOrderOptimizer = Optim.NelderMead(), 
-                                options::Optim.Options=Optim.Options())
+                                options::Optim.Options=DEFAULT_FITTING_OPTIONS[],refit::Bool = true)
 
 Fits [`CentredObj`](@ref) to binary image pattern (region of units) by adjusting centre coordinates and dimensions
 using zeroth-order optimizers from `Optim.jl` package.
@@ -23,16 +23,23 @@ optimizer - zeroth-order optimizer from `Optim.jl` package
 
 options  - optimization options from `Optim.jl` package
 
+refit - if true the starting point of the optimization recalculated otherwise it is taken from the current state vector of ROI
+
 """
 function fit_centred_obj!(c::CentredObj,im_bin::FlagMatrix;
                                 starting_point::Union{Nothing,Vector{Float64}}=nothing,
-                                optimizer::Optim.ZerothOrderOptimizer = Optim.NelderMead(), 
-                                options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) 
+                                optimizer=DEFAULT_OPTIMIZER(), 
+                                options=DEFAULT_FITTING_OPTIONS[],
+                                refit::Bool = true) 
 
         optim_fun = image_fill_discr(im_bin,c) 
-        x0 = Vector{Float64}(undef,length(c))
+        x0 = MVector{length(c),Float64}(undef)
 	    if isnothing(starting_point)
-		    fill_x0!(x0,im_bin,c)
+            if !refit
+		        fill_x0!(x0,im_bin,c)
+            else
+                fill_vect!(x0, c)
+            end
         else
             x0 = copyto!(x0,starting_point)
 	    end
@@ -70,8 +77,9 @@ function fit_all_patterns!(markers::MarkeredImage,::Type{T}=CircleObj;
                                             max_centred_objs::Int=200,
                                             sort_by_area::Bool = false,
                                             is_descend::Bool = true,
-                                            optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
-                                            options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
+                                            optimizer=DEFAULT_OPTIMIZER(), 
+                                            options=DEFAULT_FITTING_OPTIONS[],
+                                            refit::Bool=false) where T<:CentredObj
                                             
            # markers_number = count_separate_patterns(markers)       
             markers_number = length(markers) 
@@ -86,7 +94,7 @@ function fit_all_patterns!(markers::MarkeredImage,::Type{T}=CircleObj;
                 sort_markers!(markers,is_descend)
             end    
             c_vect = [T() for _ in 1:markers_number] # creating empty array of centred_objects
-            return fit_all_patterns!(c_vect, markers, optimizer,options)
+            return fit_all_patterns!(c_vect, markers, optimizer,options,refit)
     end  
     """
     fit_all_patterns!(c_vect::Vector{T},
@@ -99,8 +107,10 @@ See [`fit_all_patterns!`](@ref)
 """
 function fit_all_patterns!(c_vect::Vector{T},
                             markers::MarkeredImage,
-                            optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
-                            options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
+                            optimizer=DEFAULT_OPTIMIZER(), 
+                            options =DEFAULT_FITTING_OPTIONS[],
+                            refit::Bool = false) where T<:CentredObj
+
             num_patterns = length(markers)
             c_length = length(c_vect) 
             num_patterns =  num_patterns < c_length ? num_patterns : c_length
@@ -108,7 +118,7 @@ function fit_all_patterns!(c_vect::Vector{T},
             Threads.@sync for (i,c) in enumerate(v)
                 Threads.@spawn begin 
                     (fl,i_min,_)  = shrinked_flag(markers,i) # returns flag and minimu and maximal indices in the initial array
-                    fit_centred_obj!(c,fl,optimizer = optimizer,options = options)
+                    fit_centred_obj!(c, fl, optimizer = optimizer, options = options, refit = refit)
                     shift!(c,i_min - CartesianIndex(1,1))
                 end
             end
@@ -133,8 +143,8 @@ function fit_all_patterns(img::RescaledImage,::Type{T}=CircleObj;
                                     max_centred_objs::Int=200,
                                     sort_by_area::Bool = false,
                                     is_descend::Bool = true,
-                                    optimizer::Optim.ZerothOrderOptimizer = NelderMead(),
-                                    options::Optim.Options=DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
+                                    optimizer=DEFAULT_OPTIMIZER(), 
+                                    options =DEFAULT_FITTING_OPTIONS[]) where T<:CentredObj
 
         markers = marker_image(img,level_threshold=level_threshold,
                                 distance_threshold=distance_threshold)
@@ -162,4 +172,43 @@ function image_discr(im1,im2)
     end
 
 
+    """
+    image_fill_discr(image::FlagMatrix,c::CentredObj)
+
+Function returns the function to evaluate the discrepancy  between 
+`CentredObj` and the matrix, this function is used during the fitting procedure 
+"""    
+function image_fill_discr(image::FlagMatrix,c::CentredObj)
+     discr_obj =ImCentDiscr(image,c)   
+     return discr_obj
+                #image_discr(image, fill_im!(im_copy,fill_from_vect!(c,x)))
+
+end
+struct ImCentDiscr{T<:CentredObj,F<:FlagMatrix}
+    image_target::F
+    image_fillable::F
+    target_area::Float64
+    c::T
+    ImCentDiscr(imag::F,c::T) where {T<:CentredObj,F<:FlagMatrix}=  begin
+        new{T,F}(imag,copy(imag),sum(imag),c)
+    end
+end
+(icd::ImCentDiscr{SquareObj,F})(x::AbstractVector) where F<:FlagMatrix = begin
+    fill_from_vect!(icd.c,x)
+    s = area(icd.c)
+    fill_im!(icd.image_fillable,icd.c)
+    #s_im = sum(icd.image_fillable)
+    return +(abs(s-icd.target_area)/icd.target_area , image_discr(icd.image_target,icd.image_fillable))
+end
+(icd::ImCentDiscr)(x::AbstractVector) = begin
+    fill_from_vect!(icd.c,x)
+    s = area(icd.c)
+    fill_im!(icd.image_fillable,icd.c)
+    s_im = sum(icd.image_fillable)
+    return +(abs(s-s_im)/s_im , image_discr(icd.image_target,icd.image_fillable))
+end
+(icd::ImCentDiscr{CircleObj,F})(x::AbstractVector) where F<:FlagMatrix = begin
+    fill_im!(icd.image_fillable,fill_from_vect!(icd.c,x))
+    return image_discr(icd.image_target,icd.image_fillable)
+end
     
