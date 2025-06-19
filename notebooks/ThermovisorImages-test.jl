@@ -19,6 +19,9 @@ end
 # ╔═╡ 051044c5-760c-4b60-90fc-82a347c3b6bc
 using Revise,PlutoUI,LaTeXStrings,Images,ImageShow,Plots,BenchmarkTools,Dates,FileIO,ImageIO,Optim,CSV,Colors,ColorVectorSpace,Distributions,ColorSchemes,StaticArrays,Interpolations,FileTypes,ImageDraw,StatsBase,PlanckFunctions,RecipesBase
 
+# ╔═╡ 19d6864f-e56f-4032-9203-0382aac1208f
+using ThermovisorImages
+
 # ╔═╡ 4460f260-f65f-446d-802c-f2197f4d6b27
 md"""
 ### `ThermovisorImages.jl`
@@ -51,25 +54,23 @@ md"""
 begin# we need the project structrue inside the notebook
 	notebook_path = @__DIR__()# this notebook local path
 	project_path = abspath(joinpath(notebook_path,".."))#project's path
-	#import Pkg
-	#Pkg.activate(project_path)
-	sources_path = joinpath(project_path,"src")# it is supposed that sources are in separate folder \project_folder\src\
+	sources_path = joinpath(project_path,"src")# it is supposed that sources are in
 	assets_folder = joinpath(project_path,"assets")
 	images_folder = joinpath(project_path,"thermal images")
 end;
-
-# ╔═╡ f6c1be87-94d2-4b08-a52d-6eb637192ee8
-begin 
-	includet(joinpath(sources_path,"ThermovisorImages.jl"))
-# include(joinpath(sources_path,"ThermovisorData.jl")) #replace includet with include if Revise is not needed
-	using Main.ThermovisorImages
-end
 
 # ╔═╡ 4f93b7ba-3488-446d-8043-718fbdc5b808
 import Gtk
 
 # ╔═╡ 215ed2f4-71ba-4cb5-b198-677d0d7ffb38
 md" default image saving folder $(@bind image_save_folder PlutoUI.TextField(default = assets_folder))"
+
+# ╔═╡ f6c1be87-94d2-4b08-a52d-6eb637192ee8
+#=begin 
+	includet(joinpath(sources_path,"ThermovisorImages.jl"))
+# include(joinpath(sources_path,"ThermovisorData.jl")) #replace includet with include if Revise is not needed
+	using Main.ThermovisorImages
+end=#
 
 # ╔═╡ 870113c3-b439-4d34-90d8-fdd8a158f9dd
 md"""
@@ -3072,11 +3073,12 @@ version = "1.8.1+0"
 # ╟─4460f260-f65f-446d-802c-f2197f4d6b27
 # ╟─79b31b84-afe0-4aac-90bf-97e8cbfff5e2
 # ╟─2c5e6e4c-92af-4991-842a-7e5bdc55a46d
-# ╟─fc6af4b0-1127-11f0-1b66-a59d87c5b141
+# ╠═fc6af4b0-1127-11f0-1b66-a59d87c5b141
 # ╠═051044c5-760c-4b60-90fc-82a347c3b6bc
-# ╠═4f93b7ba-3488-446d-8043-718fbdc5b808
+# ╟─19d6864f-e56f-4032-9203-0382aac1208f
+# ╟─4f93b7ba-3488-446d-8043-718fbdc5b808
 # ╟─215ed2f4-71ba-4cb5-b198-677d0d7ffb38
-# ╠═f6c1be87-94d2-4b08-a52d-6eb637192ee8
+# ╟─f6c1be87-94d2-4b08-a52d-6eb637192ee8
 # ╟─870113c3-b439-4d34-90d8-fdd8a158f9dd
 # ╟─dd4a9e93-0d4e-497a-8ca4-0e8f36205ffb
 # ╟─43a1fb58-cd5e-4634-8770-0ff1809b2191
