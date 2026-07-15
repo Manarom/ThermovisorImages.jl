@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v1.0.1
+# v1.0.3
 
 using Markdown
 using InteractiveUtils
@@ -883,7 +883,7 @@ heatmap(im_copy .-im_to_recalc.initial,title="Temperature difference")
 # ╟─71eb240a-5a45-4bf3-b35c-a5820ca6da6c
 # ╟─4e1a5050-59b0-4d24-98bb-1520c06b28c5
 # ╟─42a7b186-aa04-4249-a129-bf925f181008
-# ╟─54c27e44-d34e-49bb-9ca4-2a8218f463d5
+# ╠═54c27e44-d34e-49bb-9ca4-2a8218f463d5
 # ╟─e1ccfd33-3d54-4249-86f1-381a1ef90615
 # ╟─b096c4f2-9dce-409d-874a-a851f577bf92
 # ╟─59f9a7f2-9601-431c-a897-543fa25c64c4
